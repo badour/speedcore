@@ -1,0 +1,38 @@
+<%@ Master Language="C#" AutoEventWireup="true" CodeBehind="Site.Master.cs" Inherits="UniversityStudentSearch.SiteMaster" %>
+
+<!DOCTYPE html>
+<html lang="en">
+<head runat="server">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050505" />
+    <title></title>
+    <link rel="icon" href="<%= ResolveUrl("~/Images/speed-core.png") %>" type="image/png" />
+    <link rel="stylesheet" href="<%= ResolveUrl("~/Content/site.css") %>" />
+</head>
+<body>
+    <form id="siteForm" runat="server">
+        <a class="skip" href="#main">Skip to search</a>
+        <header class="site-header">
+            <div class="brand">
+                <img class="seal" src="<%= ResolveUrl("~/Images/university-seal.jpg") %>" width="86" height="86" alt="Alsheikh Altoosi University" />
+                <div class="brand-copy">
+                    <p class="eyebrow">Alsheikh Altoosi University</p>
+                    <h1>Student search</h1>
+                    <p class="tagline">Fees, payments, and whether access is allowed.</p>
+                </div>
+            </div>
+            <div class="speed-lockup">
+                <img src="<%= ResolveUrl("~/Images/speed-core.png") %>" width="166" height="46" alt="Speed Core" />
+            </div>
+        </header>
+        <main id="main" class="page">
+            <asp:ContentPlaceHolder ID="MainContent" runat="server" />
+        </main>
+        <footer class="site-footer">
+            <span>Speed Core</span>
+            <span>Alsheikh Altoosi University</span>
+        </footer>
+    </form>
+</body>
+</html>

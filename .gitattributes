@@ -1,0 +1,11 @@
+* text=auto
+*.cs text diff=csharp
+*.aspx text
+*.master text
+*.css text
+*.js text
+*.config text
+*.sql text
+*.png binary
+*.jpg binary
+*.ttf binary
