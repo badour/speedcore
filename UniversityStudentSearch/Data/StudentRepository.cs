@@ -740,6 +740,39 @@ WHERE ranked.StudentRank = 1
                 + " AND (" + string.Join(" OR ", likes.ToArray()) + "))";
         }
 
+        private static string RowLabel(IDictionary<string, string> columns, IList<string> textColumns, NameLookup lookup)
+        {
+            var parts = new List<string>();
+            if (textColumns != null)
+            {
+                foreach (string column in textColumns)
+                {
+                    parts.Add("NULLIF(LTRIM(RTRIM(CONVERT(nvarchar(400), " + Expr(columns, column) + "))), N'')");
+                }
+            }
+
+            if (lookup != null)
+            {
+                string lkName = "lk." + Quote(lookup.NameColumn);
+                string table = Quote(lookup.SchemaName) + "." + Quote(lookup.TableName);
+                parts.Add("(SELECT TOP 1 NULLIF(LTRIM(RTRIM(CONVERT(nvarchar(400), " + lkName + "))), N'') FROM "
+                    + table + " AS lk WHERE lk." + Quote(lookup.IdColumn)
+                    + " = [AllStudentValueTb]." + Quote(lookup.StudentKeyColumn) + ")");
+            }
+
+            if (parts.Count == 0)
+            {
+                return "CAST(NULL AS nvarchar(400))";
+            }
+
+            if (parts.Count == 1)
+            {
+                return parts[0];
+            }
+
+            return "COALESCE(" + string.Join(", ", parts.ToArray()) + ")";
+        }
+
         private static string LatestLabel(string rankedAlias, IDictionary<string, string> columns, IList<string> textColumns, NameLookup lookup)
         {
             var parts = new List<string>();
@@ -1248,14 +1281,15 @@ WHERE ranked.StudentRank = 1
                     string id = Expr(columns, "StudentID");
                     string rowId = Expr(columns, "RowID");
                     string studentKey = "CASE WHEN " + id + " IS NULL THEN CAST(" + name + " AS nvarchar(400)) ELSE CONVERT(nvarchar(30), " + id + ") END";
-                    string departmentSql = LatestLabel("ranked", columns, departmentColumns, departmentLookup);
+                    string departmentExpr = RowLabel(columns, departmentColumns, departmentLookup);
                     string sql = @"
-SELECT ranked.StudentName, ranked.StudentID, " + departmentSql + @" AS Department, ranked.RowID
+SELECT ranked.StudentName, ranked.StudentID, ranked.Department, ranked.RowID
 FROM (
     SELECT
         " + name + @" AS StudentName,
         " + id + @" AS StudentID,
         " + rowId + @" AS RowID,
+        " + departmentExpr + @" AS Department,
         ROW_NUMBER() OVER (PARTITION BY " + studentKey + " ORDER BY " + rowId + @" DESC) AS StudentRank
     FROM [AllStudentValueTb]
     WHERE " + id + @" IS NOT NULL

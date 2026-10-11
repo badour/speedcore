@@ -24,9 +24,9 @@ Student ID is an exact match. Name, stage, and department match any part of the 
 
 ## Device sync
 
-The Device sync page compares student name, student ID, and department in `AllStudentValueTb` with people enrolled on an AYTE AI-X1 terminal. Students added on the terminal itself appear as only on the device. Students missing from the terminal appear as only in the database.
+Device sync sends student name, student ID, and department from `AllStudentValueTb` to every AYTE AI-X1 gate. Each student contributes the row with the greatest `RowID`. Pressing Sync queues students whose latest row is newer than the last sync. The first sync queues every current student.
 
-Each terminal is saved by IP address, port, and device password. These terminals answer the person API on port 8090. Department is written to the person remark and is not used to delete a person or replace a face photo. Saving into the database inserts a student or updates the latest row.
+The page does not ask for a device IP address. On each terminal, set the server host and port shown on the page. The terminal calls this site at `/iclock/cdata`, `/iclock/getrequest`, and `/iclock/devicecmd`. Sync queues the new students for every terminal that has already called, and a terminal that calls later receives the same roster. The device command updates the user record, so face photos and attendance logs already on the terminal stay in place.
 
 ## Database script
 
