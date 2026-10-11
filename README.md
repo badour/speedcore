@@ -20,7 +20,7 @@ Each match shows student name, student ID, year name, total, paid, remaining, an
 
 Access on that row is a switch. Green means allowed and writes `IsAccessAllowed = 1`. Gray means not set and writes `IsAccessAllowed = 0`.
 
-Student ID is an exact match. Name, stage, and department match any part of the value. `Database/AllStudentValueTb.sql` adds `Stage`, `Department`, `YearName`, and `RowID` when those columns are missing. The Windows login needs permission to read the table and to update `IsAccessAllowed`.
+Student ID is an exact match. Name, stage, and department match any part of the value, including common Arabic letter variants. A student matches when any of their rows contains that name. The grid still shows the latest row, and Stage and Department show the latest non-empty name. Columns such as `StageName`, `DepartmentName`, and `DeptName` are used when those hold the names, and a stage or department lookup table is used when the student row stores an id. `Database/AllStudentValueTb.sql` adds `Stage`, `Department`, `YearName`, and `RowID` when those columns are missing. The Windows login needs permission to read the table and to update `IsAccessAllowed`.
 
 ## Database script
 

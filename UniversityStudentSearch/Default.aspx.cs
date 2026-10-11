@@ -292,7 +292,7 @@ namespace UniversityStudentSearch
                 + "–" + to.ToString(CultureInfo.InvariantCulture)
                 + " of " + result.TotalCount.ToString(CultureInfo.InvariantCulture)
                 + " for " + MatchSentence()
-                + ". Latest matching row per student.");
+                + ". Latest row per student.");
 
             int pages = (int)Math.Ceiling(result.TotalCount / (double)StudentRepository.PageSize);
             pnlPager.Visible = pages > 1;
@@ -369,9 +369,9 @@ namespace UniversityStudentSearch
                 case "name":
                     return "Matches any part of the student name.";
                 case "stage":
-                    return "Matches any part of the stage.";
+                    return "Matches any part of the stage name.";
                 case "department":
-                    return "Matches any part of the department.";
+                    return "Matches any part of the department name.";
                 default:
                     return "Matches the student ID exactly.";
             }
@@ -384,9 +384,9 @@ namespace UniversityStudentSearch
                 case "name":
                     return "Full or partial name";
                 case "stage":
-                    return "Stage";
+                    return "Stage name";
                 case "department":
-                    return "Department";
+                    return "Department name";
                 default:
                     return "Student ID";
             }

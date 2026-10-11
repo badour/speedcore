@@ -18,13 +18,13 @@
             mode: "search"
         },
         stage: {
-            placeholder: "Stage",
-            hint: "Matches any part of the stage.",
+            placeholder: "Stage name",
+            hint: "Matches any part of the stage name.",
             mode: "search"
         },
         department: {
-            placeholder: "Department",
-            hint: "Matches any part of the department.",
+            placeholder: "Department name",
+            hint: "Matches any part of the department name.",
             mode: "search"
         }
     };

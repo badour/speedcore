@@ -25,6 +25,8 @@ GO
     Stage and Department are not in the original field list.
     These nullable columns let the stage and department searches return rows.
     Existing rows stay valid. Running this again does not add the columns twice.
+    The site also reads StageName, DepartmentName, DeptName, and a stage or
+    department lookup table when those already hold the names.
 */
 IF COL_LENGTH(N'dbo.AllStudentValueTb', N'Stage') IS NULL
     ALTER TABLE dbo.AllStudentValueTb ADD Stage nvarchar(200) NULL;
