@@ -3,7 +3,7 @@ using System.Configuration;
 using System.Globalization;
 using System.Threading;
 
-namespace GateDeviceBridge
+namespace StudentSyncBridge
 {
     public static class Program
     {
@@ -32,7 +32,7 @@ namespace GateDeviceBridge
             middleware = middleware.Trim().TrimEnd('/');
             var server = new BridgeServer(middleware, port);
             server.Start();
-            Console.WriteLine("GateDeviceBridge listening on port " + port.ToString(CultureInfo.InvariantCulture));
+            Console.WriteLine("StudentSyncBridge listening on port " + port.ToString(CultureInfo.InvariantCulture));
             Console.WriteLine("Middleware " + middleware);
             Thread.Sleep(Timeout.Infinite);
             return 0;

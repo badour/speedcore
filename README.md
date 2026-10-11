@@ -24,7 +24,7 @@ Student ID is an exact match. Name, stage, and department match any part of the 
 
 ## Device sync
 
-The AI-X1 terminals do not connect to IIS. Each terminal uses Yunatt WebSocket and JSON on port **7792**, path `/pub/chat`, and connects to `GateDeviceBridge`. The bridge calls this site over HTTP JSON, and this site reads `UniversityDBiap`.
+The AI-X1 terminals do not connect to IIS. Each terminal uses Yunatt WebSocket and JSON on port **7792**, path `/pub/chat`, and connects to `StudentSyncBridge`. The bridge calls this site over HTTP JSON, and this site reads `UniversityDBiap`.
 
 On each terminal, set the server request on, the server address to the computer running the bridge, and the server port to 7792. Device IP addresses are not used.
 
@@ -32,10 +32,10 @@ The sync page asks for a year name, a department, or both. A year matches any ro
 
 When a face is scanned, the terminal sends `sendlog`. The bridge asks `/gate/access`. The door opens only when the latest row has `IsAccessAllowed` set.
 
-Run the bridge beside the site:
+Build the `StudentSyncBridge` project in this solution, then run it beside the site:
 
 ```
-GateDeviceBridge.exe --middleware http://localhost:50931 --port 7792
+StudentSyncBridge.exe --middleware http://localhost:50931 --port 7792
 ```
 
 Use the address of this site for `--middleware` when IIS is not on port 50931.

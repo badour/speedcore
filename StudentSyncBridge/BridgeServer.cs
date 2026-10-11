@@ -10,7 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
 
-namespace GateDeviceBridge
+namespace StudentSyncBridge
 {
     public sealed class BridgeServer
     {
