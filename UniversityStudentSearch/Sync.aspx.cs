@@ -42,7 +42,7 @@ namespace UniversityStudentSearch
             pnlStudents.Visible = true;
             int count = students.Rows == null ? 0 : students.Rows.Count;
             string summary = count.ToString(CultureInfo.InvariantCulture)
-                + (count == 1 ? " student has unset access." : " students have unset access.");
+                + (count == 1 ? " student has null access." : " students have null access.");
             if (students.Truncated)
             {
                 summary += " Showing the first 1000.";

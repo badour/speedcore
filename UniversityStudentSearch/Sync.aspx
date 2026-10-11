@@ -6,7 +6,7 @@
     <asp:Panel ID="filterPanel" runat="server" CssClass="search-panel" DefaultButton="btnFind">
         <div class="search-copy">
             <h2>Sync students to the gates</h2>
-            <p class="lede">Find students by year name and department, then choose one name or all of them. Sync sends the latest row of each selected student: student name, student ID, and department. Only a row whose access is not set is listed.</p>
+            <p class="lede">Find students by year name and department, then choose one name or all of them. Sync sends the latest row of each selected student: student name, student ID, and department. Only a student whose latest access value is still null is listed.</p>
         </div>
         <div class="sync-controls">
             <div class="field">
@@ -21,7 +21,7 @@
                 <asp:Button ID="btnFind" runat="server" Text="Find students" CssClass="btn btn-search" OnClick="btnFind_Click" />
             </div>
         </div>
-        <p class="hint">Access must be unset. A student matches when the latest row contains that year or department. On each terminal, set the Yunatt server port to <strong>7792</strong>. GateDeviceBridge calls this site at <strong><%= Server.HtmlEncode(MiddlewareAddress) %></strong>.</p>
+        <p class="hint">A year matches any row for that student, including 2026/2027 and 2026-2027. A department matches any row, including DepartmentName, DeptName, and a department lookup. When both boxes are filled, the student must match both. Access on the latest row must be null. On each terminal, set the Yunatt server port to <strong>7792</strong>. GateDeviceBridge calls this site at <strong><%= Server.HtmlEncode(MiddlewareAddress) %></strong>.</p>
     </asp:Panel>
 
     <asp:Panel ID="pnlStudents" runat="server" Visible="false" CssClass="results-wrap">
@@ -37,7 +37,7 @@
                 UseAccessibleHeader="True"
                 DataKeyNames="RowID,StudentID,StudentName,Department"
                 OnRowDataBound="gvStudents_RowDataBound"
-                EmptyDataText="No students with unset access match that year and department.">
+                EmptyDataText="No students with null access match that year and department.">
                 <Columns>
                     <asp:TemplateField HeaderText="Send">
                         <HeaderTemplate>

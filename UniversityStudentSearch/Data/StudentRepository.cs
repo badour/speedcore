@@ -359,6 +359,28 @@ namespace UniversityStudentSearch.Data
             "Dept"
         };
 
+        private static readonly string[] YearNameColumns = new[]
+        {
+            "YearName",
+            "Year_Name",
+            "AcademicYear",
+            "AcademicYearName",
+            "StudyYear",
+            "StudyYearName",
+            "YearTitle",
+            "Year"
+        };
+
+        private static readonly int[] YearSpaces = new[]
+        {
+            0x0009, 0x0020, 0x00A0
+        };
+
+        private static readonly int[] YearDashes = new[]
+        {
+            0x002F, 0x005C, 0x005F, 0x2010, 0x2011, 0x2012, 0x2013, 0x2014, 0x2212, 0xFE63, 0xFF0D, 0xFF0F
+        };
+
         private static readonly string[] StageKeyColumns = new[]
         {
             "StageID",
@@ -712,12 +734,20 @@ WHERE ranked.StudentRank = 1
 
         private static string ExistsLike(IDictionary<string, string> columns, IList<string> textColumns, NameLookup lookup)
         {
+            return ExistsLike(columns, textColumns, lookup, "@Term", false);
+        }
+
+        private static string ExistsLike(IDictionary<string, string> columns, IList<string> textColumns, NameLookup lookup, string parameterName, bool yearText)
+        {
             var likes = new List<string>();
             if (textColumns != null)
             {
                 foreach (string column in textColumns)
                 {
-                    likes.Add(LikeExpr("matched." + Quote(column)));
+                    string expression = "matched." + Quote(column);
+                    likes.Add(yearText
+                        ? YearLikeExpr(expression, parameterName)
+                        : LikeExpr(expression, parameterName));
                 }
             }
 
@@ -727,7 +757,7 @@ WHERE ranked.StudentRank = 1
                 join = " LEFT JOIN " + Quote(lookup.SchemaName) + "." + Quote(lookup.TableName)
                     + " AS nameLookup ON nameLookup." + Quote(lookup.IdColumn)
                     + " = matched." + Quote(lookup.StudentKeyColumn);
-                likes.Add(LikeExpr("nameLookup." + Quote(lookup.NameColumn)));
+                likes.Add(LikeExpr("nameLookup." + Quote(lookup.NameColumn), parameterName));
             }
 
             if (likes.Count == 0)
@@ -775,17 +805,24 @@ WHERE ranked.StudentRank = 1
 
         private static string LatestLabel(string rankedAlias, IDictionary<string, string> columns, IList<string> textColumns, NameLookup lookup)
         {
+            return LatestFilteredLabel(rankedAlias, columns, textColumns, lookup, null, false);
+        }
+
+        private static string LatestFilteredLabel(
+            string rankedAlias,
+            IDictionary<string, string> columns,
+            IList<string> textColumns,
+            NameLookup lookup,
+            string likeParameter,
+            bool yearText)
+        {
             var parts = new List<string>();
             string rowId = Expr(columns, "RowID");
             if (textColumns != null)
             {
                 foreach (string column in textColumns)
                 {
-                    string quoted = "src." + Quote(column);
-                    parts.Add("(SELECT TOP 1 CONVERT(nvarchar(400), " + quoted + ") FROM [AllStudentValueTb] AS src WHERE "
-                        + SameStudent("src", rankedAlias, columns)
-                        + " AND NULLIF(LTRIM(RTRIM(CONVERT(nvarchar(400), " + quoted + "))), N'') IS NOT NULL ORDER BY src."
-                        + rowId + " DESC)");
+                    parts.Add(LatestValueSelect("src." + Quote(column), rankedAlias, columns, rowId, likeParameter, yearText, null));
                 }
             }
 
@@ -793,11 +830,9 @@ WHERE ranked.StudentRank = 1
             {
                 string lkName = "lk." + Quote(lookup.NameColumn);
                 string table = Quote(lookup.SchemaName) + "." + Quote(lookup.TableName);
-                parts.Add("(SELECT TOP 1 CONVERT(nvarchar(400), " + lkName + ") FROM [AllStudentValueTb] AS src INNER JOIN "
-                    + table + " AS lk ON lk." + Quote(lookup.IdColumn) + " = src." + Quote(lookup.StudentKeyColumn)
-                    + " WHERE " + SameStudent("src", rankedAlias, columns)
-                    + " AND NULLIF(LTRIM(RTRIM(CONVERT(nvarchar(400), " + lkName + "))), N'') IS NOT NULL ORDER BY src."
-                    + rowId + " DESC)");
+                string join = " INNER JOIN " + table + " AS lk ON lk." + Quote(lookup.IdColumn)
+                    + " = src." + Quote(lookup.StudentKeyColumn);
+                parts.Add(LatestValueSelect(lkName, rankedAlias, columns, rowId, likeParameter, false, join));
             }
 
             if (parts.Count == 0)
@@ -813,6 +848,31 @@ WHERE ranked.StudentRank = 1
             return "COALESCE(" + string.Join(", ", parts.ToArray()) + ")";
         }
 
+        private static string LatestValueSelect(
+            string valueExpr,
+            string rankedAlias,
+            IDictionary<string, string> columns,
+            string rowId,
+            string likeParameter,
+            bool yearText,
+            string extraJoin)
+        {
+            string match = string.Empty;
+            if (!string.IsNullOrEmpty(likeParameter))
+            {
+                match = " AND " + (yearText
+                    ? YearLikeExpr(valueExpr, likeParameter)
+                    : LikeExpr(valueExpr, likeParameter));
+            }
+
+            return "(SELECT TOP 1 CONVERT(nvarchar(400), " + valueExpr + ") FROM [AllStudentValueTb] AS src"
+                + (extraJoin ?? string.Empty)
+                + " WHERE " + SameStudent("src", rankedAlias, columns)
+                + " AND NULLIF(LTRIM(RTRIM(CONVERT(nvarchar(400), " + valueExpr + "))), N'') IS NOT NULL"
+                + match
+                + " ORDER BY src." + rowId + " DESC)";
+        }
+
         private static string SameStudent(string sourceAlias, string rankedAlias, IDictionary<string, string> columns)
         {
             string sourceId = sourceAlias + "." + Expr(columns, "StudentID");
@@ -825,7 +885,60 @@ WHERE ranked.StudentRank = 1
 
         private static string LikeExpr(string expression)
         {
-            return NormalizedSql(expression) + " LIKE @Term ESCAPE N'\\'";
+            return LikeExpr(expression, "@Term");
+        }
+
+        private static string LikeExpr(string expression, string parameterName)
+        {
+            return NormalizedSql(expression) + " LIKE " + LikeParameter(parameterName) + " ESCAPE N'\\'";
+        }
+
+        private static string YearLikeExpr(string expression, string parameterName)
+        {
+            return YearComparableSql(expression) + " LIKE " + LikeParameter(parameterName) + " ESCAPE N'\\'";
+        }
+
+        private static string YearComparableSql(string expression)
+        {
+            string result = NormalizedSql(expression);
+            for (int i = 0; i < YearSpaces.Length; i++)
+            {
+                result = "REPLACE(" + result + ", NCHAR(" + YearSpaces[i].ToString(CultureInfo.InvariantCulture) + "), N'')";
+            }
+
+            for (int i = 0; i < YearDashes.Length; i++)
+            {
+                result = "REPLACE(" + result + ", NCHAR(" + YearDashes[i].ToString(CultureInfo.InvariantCulture) + "), N'-')";
+            }
+
+            for (int digit = 0; digit <= 9; digit++)
+            {
+                string ascii = "N'" + digit.ToString(CultureInfo.InvariantCulture) + "'";
+                result = "REPLACE(" + result + ", NCHAR(" + (0x0660 + digit).ToString(CultureInfo.InvariantCulture) + "), " + ascii + ")";
+                result = "REPLACE(" + result + ", NCHAR(" + (0x06F0 + digit).ToString(CultureInfo.InvariantCulture) + "), " + ascii + ")";
+            }
+
+            return result;
+        }
+
+        private static string LikeParameter(string parameterName)
+        {
+            if (string.IsNullOrEmpty(parameterName) || parameterName[0] != '@' || parameterName.Length < 2)
+            {
+                throw new ArgumentException("parameterName");
+            }
+
+            for (int i = 1; i < parameterName.Length; i++)
+            {
+                char ch = parameterName[i];
+                bool ok = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9');
+                if (!ok)
+                {
+                    throw new ArgumentException("parameterName");
+                }
+            }
+
+            return parameterName;
         }
 
         private static string NormalizedSql(string expression)
@@ -860,6 +973,107 @@ WHERE ranked.StudentRank = 1
             }
 
             return builder.ToString();
+        }
+
+        private static string NormalizeYearText(string value)
+        {
+            string folded = NormalizeSearchText(value);
+            var builder = new StringBuilder(folded.Length);
+            foreach (char ch in folded)
+            {
+                int code = ch;
+                if (Array.IndexOf(YearSpaces, code) >= 0)
+                {
+                    continue;
+                }
+
+                if (Array.IndexOf(YearDashes, code) >= 0)
+                {
+                    builder.Append('-');
+                    continue;
+                }
+
+                if (code >= 0x0660 && code <= 0x0669)
+                {
+                    builder.Append((char)('0' + (code - 0x0660)));
+                    continue;
+                }
+
+                if (code >= 0x06F0 && code <= 0x06F9)
+                {
+                    builder.Append((char)('0' + (code - 0x06F0)));
+                    continue;
+                }
+
+                builder.Append(ch);
+            }
+
+            return builder.ToString();
+        }
+
+        private static string NormalizeDepartmentTerm(string value)
+        {
+            string folded = NormalizeSearchText(value).Trim();
+            string reduced = folded;
+            const string departmentTitle = "\u0642\u0633\u0645";
+            const string definiteArticle = "\u0627\u0644";
+            if (reduced.StartsWith(departmentTitle, StringComparison.Ordinal))
+            {
+                string rest = reduced.Substring(departmentTitle.Length).Trim();
+                if (rest.Length > 0)
+                {
+                    reduced = rest;
+                }
+            }
+
+            if (reduced.StartsWith(definiteArticle, StringComparison.Ordinal) && reduced.Length > definiteArticle.Length + 2)
+            {
+                reduced = reduced.Substring(definiteArticle.Length).Trim();
+            }
+
+            return reduced.Length < 2 ? folded : reduced;
+        }
+
+        private static List<string> ResolveYearColumns(IDictionary<string, string> columns)
+        {
+            var result = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (columns == null)
+            {
+                return result;
+            }
+
+            foreach (string candidate in YearNameColumns)
+            {
+                string actual = FindKey(columns, candidate);
+                if (actual == null || !IsTextColumn(columns, actual) || !seen.Add(actual))
+                {
+                    continue;
+                }
+
+                result.Add(actual);
+            }
+
+            var extras = new List<string>();
+            foreach (string actual in columns.Keys)
+            {
+                if (seen.Contains(actual) || !IsTextColumn(columns, actual))
+                {
+                    continue;
+                }
+
+                string compact = Compact(actual);
+                if (compact.EndsWith("id") || compact.EndsWith("no") || compact.EndsWith("number") || compact.EndsWith("code") || !compact.Contains("year"))
+                {
+                    continue;
+                }
+
+                extras.Add(actual);
+            }
+
+            extras.Sort(StringComparer.OrdinalIgnoreCase);
+            result.AddRange(extras);
+            return result;
         }
 
         private static List<string> ResolveTextColumns(IDictionary<string, string> columns, NameKind kind)
@@ -1391,11 +1605,6 @@ ORDER BY ranked.StudentName, ranked.StudentID";
                         {
                             return IdentityFail("AllStudentValueTb is missing the IsAccessAllowed column.");
                         }
-
-                        if (!columns.ContainsKey("YearName"))
-                        {
-                            return IdentityFail("AllStudentValueTb needs a YearName column. Run Database/AllStudentValueTb.sql.");
-                        }
                     }
 
                     var departmentColumns = columns.Count > 0
@@ -1404,38 +1613,45 @@ ORDER BY ranked.StudentName, ranked.StudentID";
                     NameLookup departmentLookup = columns.Count > 0
                         ? FindLookup(LoadForeignColumns(connection, schema), columns, NameKind.Department)
                         : null;
+                    var yearColumns = columns.Count > 0
+                        ? ResolveYearColumns(columns)
+                        : new List<string> { "YearName" };
                     if (department.Length > 0 && departmentColumns.Count == 0 && departmentLookup == null)
                     {
                         return IdentityFail(MissingOptionalColumn("Department"));
                     }
 
+                    if (yearName.Length > 0 && yearColumns.Count == 0)
+                    {
+                        return IdentityFail("AllStudentValueTb needs a YearName column. Run Database/AllStudentValueTb.sql.");
+                    }
+
                     string name = Expr(columns, "StudentName");
                     string id = Expr(columns, "StudentID");
                     string rowId = Expr(columns, "RowID");
-                    string year = Expr(columns, "YearName");
                     string access = Expr(columns, "IsAccessAllowed");
                     string studentKey = "CASE WHEN " + id + " IS NULL THEN CAST(" + name + " AS nvarchar(400)) ELSE CONVERT(nvarchar(30), " + id + ") END";
-                    string departmentExpr = RowLabel(columns, departmentColumns, departmentLookup);
+                    // Match year and department on any row. Access stays on the latest row, and it must still be null.
+                    string yearLabel = LatestFilteredLabel("ranked", columns, yearColumns, null, yearName.Length > 0 ? "@Year" : null, true);
+                    string departmentLabel = LatestFilteredLabel("ranked", columns, departmentColumns, departmentLookup, department.Length > 0 ? "@Department" : null, false);
                     string filter = "ranked.IsAccessAllowed IS NULL";
                     if (yearName.Length > 0)
                     {
-                        filter += " AND " + NormalizedSql("ranked.YearName") + " LIKE @Year ESCAPE N'\\'";
+                        filter += " AND " + ExistsLike(columns, yearColumns, null, "@Year", true);
                     }
 
                     if (department.Length > 0)
                     {
-                        filter += " AND " + NormalizedSql("ranked.Department") + " LIKE @Department ESCAPE N'\\'";
+                        filter += " AND " + ExistsLike(columns, departmentColumns, departmentLookup, "@Department", false);
                     }
 
                     string sql = @"
-SELECT TOP 1001 ranked.StudentName, ranked.StudentID, ranked.Department, ranked.YearName, ranked.RowID
+SELECT TOP 1001 ranked.StudentName, ranked.StudentID, " + departmentLabel + @" AS Department, " + yearLabel + @" AS YearName, ranked.RowID
 FROM (
     SELECT
         " + name + @" AS StudentName,
         " + id + @" AS StudentID,
         " + rowId + @" AS RowID,
-        " + year + @" AS YearName,
-        " + departmentExpr + @" AS Department,
         " + access + @" AS IsAccessAllowed,
         ROW_NUMBER() OVER (PARTITION BY " + studentKey + @" ORDER BY " + rowId + @" DESC) AS StudentRank
     FROM [AllStudentValueTb]
@@ -1451,12 +1667,12 @@ ORDER BY ranked.StudentName, ranked.StudentID";
                         command.CommandTimeout = 60;
                         if (yearName.Length > 0)
                         {
-                            command.Parameters.Add("@Year", SqlDbType.NVarChar, 420).Value = "%" + EscapeLike(NormalizeSearchText(yearName)) + "%";
+                            command.Parameters.Add("@Year", SqlDbType.NVarChar, 420).Value = "%" + EscapeLike(NormalizeYearText(yearName)) + "%";
                         }
 
                         if (department.Length > 0)
                         {
-                            command.Parameters.Add("@Department", SqlDbType.NVarChar, 420).Value = "%" + EscapeLike(NormalizeSearchText(department)) + "%";
+                            command.Parameters.Add("@Department", SqlDbType.NVarChar, 420).Value = "%" + EscapeLike(NormalizeDepartmentTerm(department)) + "%";
                         }
 
                         using (var reader = command.ExecuteReader())
