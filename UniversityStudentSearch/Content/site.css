@@ -435,69 +435,94 @@ table.results .num { text-align: right; }
     background: #3f1d1d;
 }
 
-.access-switch {
+table.results td.year,
+table.results th.year,
+table.results td.access,
+table.results th.access {
+    white-space: nowrap;
+}
+
+table.results td.access {
+    min-width: 148px;
+}
+
+table.results .access-switch {
     position: relative;
     display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 10px;
-    cursor: pointer;
-    user-select: none;
-}
-
-.access-switch input {
-    position: absolute;
-    opacity: 0;
-    width: 48px;
-    height: 28px;
     margin: 0;
     cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
 }
 
-.switch-track {
+table.results .access-switch input {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 52px;
+    height: 30px;
+    margin: 0;
+    opacity: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+
+table.results .switch-track {
     position: relative;
-    width: 48px;
-    height: 28px;
+    display: inline-block;
+    width: 52px;
+    height: 30px;
     flex: none;
     border-radius: 999px;
     background: #6b7280;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-    transition: background 0.16s ease;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+    vertical-align: middle;
 }
 
-.switch-knob {
+table.results .switch-knob {
     position: absolute;
     top: 3px;
     left: 3px;
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: #f4f4f5;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-    transition: transform 0.16s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
-.access-switch input:checked ~ .switch-track {
+table.results .access-switch.is-on .switch-track {
     background: #22c55e;
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.45);
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.55);
 }
 
-.access-switch input:checked ~ .switch-track .switch-knob {
-    transform: translateX(20px);
+table.results .access-switch.is-on .switch-knob {
+    transform: translateX(22px);
 }
 
-.access-switch input:focus-visible ~ .switch-track {
+table.results .access-switch.is-off .switch-track {
+    background: #6b7280;
+}
+
+table.results .access-switch input:focus-visible ~ .switch-track {
     outline: 2px solid #22c55e;
     outline-offset: 3px;
 }
 
-.switch-label {
+table.results .switch-label {
+    display: inline-block;
     font-size: 13px;
-    font-weight: 650;
-    color: #a3a3a3;
-    min-width: 4.5em;
+    font-weight: 700;
+    line-height: 1;
+    color: #c4c4c4;
+    white-space: nowrap;
 }
 
-.access-switch input:checked ~ .switch-label {
+table.results .access-switch.is-on .switch-label {
     color: #bbf7d0;
 }
 

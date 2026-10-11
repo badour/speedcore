@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Web;
 using System.Web.UI;
+using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
 using UniversityStudentSearch.Data;
 
@@ -131,6 +132,7 @@ namespace UniversityStudentSearch
 
             var access = e.Row.FindControl("chkAccess") as CheckBox;
             var accessLabel = e.Row.FindControl("lblAccessState") as Label;
+            var shell = e.Row.FindControl("accessShell") as HtmlGenericControl;
             if (access == null)
             {
                 return;
@@ -139,6 +141,11 @@ namespace UniversityStudentSearch
             bool allowed = row.IsAccessAllowed == true;
             access.Checked = allowed;
             access.InputAttributes["aria-label"] = allowed ? "Allowed" : "Not set";
+            if (shell != null)
+            {
+                shell.Attributes["class"] = allowed ? "access-switch is-on" : "access-switch is-off";
+            }
+
             if (accessLabel != null)
             {
                 accessLabel.Text = allowed ? "Allowed" : "Not set";

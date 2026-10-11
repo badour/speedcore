@@ -56,7 +56,7 @@
                     <asp:TemplateField HeaderText="Student ID" ItemStyle-CssClass="id" HeaderStyle-CssClass="id">
                         <ItemTemplate><%# IdText(Eval("StudentID")) %></ItemTemplate>
                     </asp:TemplateField>
-                    <asp:TemplateField HeaderText="Year name" Visible="False">
+                    <asp:TemplateField HeaderText="Year name" Visible="False" ItemStyle-CssClass="year" HeaderStyle-CssClass="year">
                         <ItemTemplate>
                             <span dir="auto"><%# TextOrDash(Eval("YearName")) %></span>
                         </ItemTemplate>
@@ -80,12 +80,12 @@
                     <asp:TemplateField HeaderText="Remaining" ItemStyle-CssClass="num" HeaderStyle-CssClass="num">
                         <ItemTemplate><%# MoneyText(Eval("RemainingValue")) %></ItemTemplate>
                     </asp:TemplateField>
-                    <asp:TemplateField HeaderText="Access">
+                    <asp:TemplateField HeaderText="Access" ItemStyle-CssClass="access" HeaderStyle-CssClass="access">
                         <ItemTemplate>
-                            <label class="access-switch">
+                            <label id="accessShell" runat="server" class="access-switch is-off">
                                 <asp:CheckBox ID="chkAccess" runat="server" ClientIDMode="AutoID" AutoPostBack="true" OnCheckedChanged="chkAccess_CheckedChanged" />
                                 <span class="switch-track"><span class="switch-knob"></span></span>
-                                <asp:Label ID="lblAccessState" runat="server" CssClass="switch-label" />
+                                <asp:Label ID="lblAccessState" runat="server" CssClass="switch-label" Text="Not set" />
                             </label>
                         </ItemTemplate>
                     </asp:TemplateField>
