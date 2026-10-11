@@ -346,7 +346,7 @@ select {
 
 table.results {
     width: 100%;
-    min-width: 920px;
+    min-width: 820px;
     border-collapse: collapse;
     border: 0;
 }
@@ -435,27 +435,77 @@ table.results .num { text-align: right; }
     background: #3f1d1d;
 }
 
-.access-edit {
-    display: flex;
+.access-switch {
+    position: relative;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
 }
 
-.access-choice {
-    height: 36px;
-    min-width: 118px;
-    border-radius: 10px;
-    border: 1px solid #2c2c2c;
-    background: #050505;
-    color: var(--ink);
-    padding: 0 8px;
-    color-scheme: dark;
+.access-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 48px;
+    height: 28px;
+    margin: 0;
+    cursor: pointer;
 }
 
-.btn-small {
-    height: 36px;
-    padding: 0 12px;
-    font-size: 14px;
+.switch-track {
+    position: relative;
+    width: 48px;
+    height: 28px;
+    flex: none;
+    border-radius: 999px;
+    background: #6b7280;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    transition: background 0.16s ease;
+}
+
+.switch-knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #f4f4f5;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    transition: transform 0.16s ease;
+}
+
+.access-switch input:checked ~ .switch-track {
+    background: #22c55e;
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.45);
+}
+
+.access-switch input:checked ~ .switch-track .switch-knob {
+    transform: translateX(20px);
+}
+
+.access-switch input:focus-visible ~ .switch-track {
+    outline: 2px solid #22c55e;
+    outline-offset: 3px;
+}
+
+.switch-label {
+    font-size: 13px;
+    font-weight: 650;
+    color: #a3a3a3;
+    min-width: 4.5em;
+}
+
+.access-switch input:checked ~ .switch-label {
+    color: #bbf7d0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .switch-track,
+    .switch-knob {
+        transition: none;
+    }
 }
 
 .badge-unknown {

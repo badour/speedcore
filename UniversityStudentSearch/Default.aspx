@@ -45,7 +45,6 @@
                 CellSpacing="0"
                 DataKeyNames="RowID"
                 UseAccessibleHeader="True"
-                OnRowCommand="gvStudents_RowCommand"
                 OnRowDataBound="gvStudents_RowDataBound"
                 OnPreRender="gvStudents_PreRender">
                 <Columns>
@@ -83,14 +82,11 @@
                     </asp:TemplateField>
                     <asp:TemplateField HeaderText="Access">
                         <ItemTemplate>
-                            <div class="access-edit">
-                                <asp:DropDownList ID="ddlAccess" runat="server" CssClass="access-choice">
-                                    <asp:ListItem Value="" Text="Choose" />
-                                    <asp:ListItem Value="true" Text="Allowed" />
-                                    <asp:ListItem Value="false" Text="Not set" />
-                                </asp:DropDownList>
-                                <asp:Button ID="btnSaveAccess" runat="server" Text="Save" CssClass="btn btn-ghost btn-small" CausesValidation="false" UseSubmitBehavior="false" CommandName="SaveAccess" CommandArgument='<%# Container.DataItemIndex %>' />
-                            </div>
+                            <label class="access-switch">
+                                <asp:CheckBox ID="chkAccess" runat="server" ClientIDMode="AutoID" AutoPostBack="true" OnCheckedChanged="chkAccess_CheckedChanged" />
+                                <span class="switch-track"><span class="switch-knob"></span></span>
+                                <asp:Label ID="lblAccessState" runat="server" CssClass="switch-label" />
+                            </label>
                         </ItemTemplate>
                     </asp:TemplateField>
                 </Columns>

@@ -18,7 +18,7 @@ Server=.;Database=UniversityDBiap;Trusted_Connection=True;TrustServerCertificate
 
 Each match shows student name, student ID, year name, total, paid, remaining, and access. If a student has more than one row, the grid keeps the row with the greatest `RowID`.
 
-Access can be changed on that row. Allowed writes `IsAccessAllowed = 1`. Not set writes `IsAccessAllowed = 0`.
+Access on that row is a switch. Green means allowed and writes `IsAccessAllowed = 1`. Gray means not set and writes `IsAccessAllowed = 0`.
 
 Student ID is an exact match. Name, stage, and department match any part of the value. `Database/AllStudentValueTb.sql` adds `Stage`, `Department`, `YearName`, and `RowID` when those columns are missing. The Windows login needs permission to read the table and to update `IsAccessAllowed`.
 

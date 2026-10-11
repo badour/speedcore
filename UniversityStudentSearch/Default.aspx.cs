@@ -129,25 +129,26 @@ namespace UniversityStudentSearch
                 return;
             }
 
-            var access = e.Row.FindControl("ddlAccess") as DropDownList;
+            var access = e.Row.FindControl("chkAccess") as CheckBox;
+            var accessLabel = e.Row.FindControl("lblAccessState") as Label;
             if (access == null)
             {
                 return;
             }
 
-            if (row.IsAccessAllowed == true)
+            bool allowed = row.IsAccessAllowed == true;
+            access.Checked = allowed;
+            access.InputAttributes["aria-label"] = allowed ? "Allowed" : "Not set";
+            if (accessLabel != null)
             {
-                access.SelectedValue = "true";
-            }
-            else if (row.IsAccessAllowed == false)
-            {
-                access.SelectedValue = "false";
+                accessLabel.Text = allowed ? "Allowed" : "Not set";
             }
         }
 
-        protected void gvStudents_RowCommand(object sender, GridViewCommandEventArgs e)
+        protected void chkAccess_CheckedChanged(object sender, EventArgs e)
         {
-            if (!string.Equals(e.CommandName, "SaveAccess", StringComparison.Ordinal))
+            var access = sender as CheckBox;
+            if (access == null)
             {
                 return;
             }
@@ -158,11 +159,15 @@ namespace UniversityStudentSearch
                 return;
             }
 
-            int rowIndex;
-            if (!int.TryParse(Convert.ToString(e.CommandArgument, CultureInfo.InvariantCulture), NumberStyles.Integer, CultureInfo.InvariantCulture, out rowIndex)
-                || rowIndex < 0
-                || rowIndex >= gvStudents.Rows.Count
-                || gvStudents.DataKeys.Count <= rowIndex)
+            var gridRow = access.NamingContainer as GridViewRow;
+            if (gridRow == null)
+            {
+                ShowMessage("That row could not be updated. Search again and retry.", true);
+                return;
+            }
+
+            int rowIndex = gridRow.RowIndex;
+            if (rowIndex < 0 || gvStudents.DataKeys.Count <= rowIndex)
             {
                 ShowMessage("That row could not be updated. Search again and retry.", true);
                 return;
@@ -172,18 +177,12 @@ namespace UniversityStudentSearch
             if (key == null || key == DBNull.Value)
             {
                 ShowMessage("This row has no RowID, so access cannot be saved.", true);
-                return;
-            }
-
-            var access = gvStudents.Rows[rowIndex].FindControl("ddlAccess") as DropDownList;
-            if (access == null || (access.SelectedValue != "true" && access.SelectedValue != "false"))
-            {
-                ShowMessage("Choose Allowed or Not set.", true);
+                BindGrid();
                 return;
             }
 
             long rowId = Convert.ToInt64(key, CultureInfo.InvariantCulture);
-            bool allowed = access.SelectedValue == "true";
+            bool allowed = access.Checked;
             string error = StudentRepository.UpdateAccess(rowId, allowed);
             BindGrid();
             if (!string.IsNullOrEmpty(error))
