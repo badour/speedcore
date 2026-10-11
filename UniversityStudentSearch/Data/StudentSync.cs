@@ -7,6 +7,7 @@ namespace UniversityStudentSearch.Data
         public long RowID { get; set; }
         public long StudentID { get; set; }
         public string StudentName { get; set; }
+        public string YearName { get; set; }
         public string Department { get; set; }
     }
 
@@ -15,6 +16,7 @@ namespace UniversityStudentSearch.Data
         public List<SyncStudent> Rows { get; set; }
         public string DepartmentColumn { get; set; }
         public string ErrorMessage { get; set; }
+        public bool Truncated { get; set; }
 
         public bool Succeeded
         {

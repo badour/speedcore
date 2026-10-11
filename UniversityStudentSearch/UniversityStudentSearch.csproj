@@ -63,6 +63,7 @@
     <Content Include="Images\speed-core.png" />
     <Content Include="Images\university-seal.jpg" />
     <Content Include="Scripts\search.js" />
+    <Content Include="Scripts\sync.js" />
     <Content Include="Sync.aspx" />
     <Content Include="Site.Master" />
     <Content Include="Web.config" />

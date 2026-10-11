@@ -28,7 +28,7 @@ The AI-X1 terminals do not connect to IIS. Each terminal uses Yunatt WebSocket a
 
 On each terminal, set the server request on, the server address to the computer running the bridge, and the server port to 7792. Device IP addresses are not used.
 
-Pressing Sync queues student name, student ID, and department from the row with the greatest `RowID`. The first sync queues every current student. Later presses queue only students whose latest row is newer. The bridge sends `setuserinfo` to every connected terminal. That command does not include a face photo, and it does not delete people or attendance logs. A terminal that connects later receives the same students.
+The sync page first asks for a year name, a department, or both. It lists only the latest row of each matching student, and only when `IsAccessAllowed` is null. Choose one student or all of them, then Sync queues those names, IDs, and departments. A later sync of the same row does not queue it again. The bridge sends `setuserinfo` to every connected terminal. That command does not include a face photo, and it does not delete people or attendance logs. A terminal that connects later receives the same students.
 
 When a face is scanned, the terminal sends `sendlog`. The bridge asks `/gate/access`. The door opens only when the latest row has `IsAccessAllowed` set.
 

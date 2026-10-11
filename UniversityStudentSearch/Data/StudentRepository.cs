@@ -1348,6 +1348,171 @@ ORDER BY ranked.StudentName, ranked.StudentID";
             }
         }
 
+        public static IdentityListResult ListForSync(string yearName, string department)
+        {
+            yearName = (yearName ?? string.Empty).Trim();
+            department = (department ?? string.Empty).Trim();
+            if (yearName.Length > 200)
+            {
+                yearName = yearName.Substring(0, 200);
+            }
+
+            if (department.Length > 200)
+            {
+                department = department.Substring(0, 200);
+            }
+
+            if (yearName.Length == 0 && department.Length == 0)
+            {
+                return IdentityFail("Enter a year name or a department.");
+            }
+
+            var settings = ConfigurationManager.ConnectionStrings[ConnectionName];
+            if (settings == null || string.IsNullOrWhiteSpace(settings.ConnectionString))
+            {
+                return IdentityFail("The UniversityDBiap connection string is missing from Web.config.");
+            }
+
+            try
+            {
+                using (var connection = new SqlConnection(settings.ConnectionString))
+                {
+                    connection.Open();
+                    string schema;
+                    var columns = LoadColumns(connection, out schema);
+                    if (columns.Count > 0)
+                    {
+                        if (!columns.ContainsKey("StudentName") || !columns.ContainsKey("StudentID") || !columns.ContainsKey("RowID"))
+                        {
+                            return IdentityFail("AllStudentValueTb is missing StudentName, StudentID, or RowID.");
+                        }
+
+                        if (!columns.ContainsKey("IsAccessAllowed"))
+                        {
+                            return IdentityFail("AllStudentValueTb is missing the IsAccessAllowed column.");
+                        }
+
+                        if (!columns.ContainsKey("YearName"))
+                        {
+                            return IdentityFail("AllStudentValueTb needs a YearName column. Run Database/AllStudentValueTb.sql.");
+                        }
+                    }
+
+                    var departmentColumns = columns.Count > 0
+                        ? ResolveTextColumns(columns, NameKind.Department)
+                        : new List<string>();
+                    NameLookup departmentLookup = columns.Count > 0
+                        ? FindLookup(LoadForeignColumns(connection, schema), columns, NameKind.Department)
+                        : null;
+                    if (department.Length > 0 && departmentColumns.Count == 0 && departmentLookup == null)
+                    {
+                        return IdentityFail(MissingOptionalColumn("Department"));
+                    }
+
+                    string name = Expr(columns, "StudentName");
+                    string id = Expr(columns, "StudentID");
+                    string rowId = Expr(columns, "RowID");
+                    string year = Expr(columns, "YearName");
+                    string access = Expr(columns, "IsAccessAllowed");
+                    string studentKey = "CASE WHEN " + id + " IS NULL THEN CAST(" + name + " AS nvarchar(400)) ELSE CONVERT(nvarchar(30), " + id + ") END";
+                    string departmentExpr = RowLabel(columns, departmentColumns, departmentLookup);
+                    string filter = "ranked.IsAccessAllowed IS NULL";
+                    if (yearName.Length > 0)
+                    {
+                        filter += " AND " + NormalizedSql("ranked.YearName") + " LIKE @Year ESCAPE N'\\'";
+                    }
+
+                    if (department.Length > 0)
+                    {
+                        filter += " AND " + NormalizedSql("ranked.Department") + " LIKE @Department ESCAPE N'\\'";
+                    }
+
+                    string sql = @"
+SELECT TOP 1001 ranked.StudentName, ranked.StudentID, ranked.Department, ranked.YearName, ranked.RowID
+FROM (
+    SELECT
+        " + name + @" AS StudentName,
+        " + id + @" AS StudentID,
+        " + rowId + @" AS RowID,
+        " + year + @" AS YearName,
+        " + departmentExpr + @" AS Department,
+        " + access + @" AS IsAccessAllowed,
+        ROW_NUMBER() OVER (PARTITION BY " + studentKey + @" ORDER BY " + rowId + @" DESC) AS StudentRank
+    FROM [AllStudentValueTb]
+    WHERE " + id + @" IS NOT NULL
+) AS ranked
+WHERE ranked.StudentRank = 1
+  AND " + filter + @"
+ORDER BY ranked.StudentName, ranked.StudentID";
+
+                    var rows = new List<SyncStudent>();
+                    using (var command = new SqlCommand(sql, connection))
+                    {
+                        command.CommandTimeout = 60;
+                        if (yearName.Length > 0)
+                        {
+                            command.Parameters.Add("@Year", SqlDbType.NVarChar, 420).Value = "%" + EscapeLike(NormalizeSearchText(yearName)) + "%";
+                        }
+
+                        if (department.Length > 0)
+                        {
+                            command.Parameters.Add("@Department", SqlDbType.NVarChar, 420).Value = "%" + EscapeLike(NormalizeSearchText(department)) + "%";
+                        }
+
+                        using (var reader = command.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                long? studentId = ReadInt64(reader, "StudentID");
+                                long? identity = ReadInt64(reader, "RowID");
+                                if (!studentId.HasValue || !identity.HasValue)
+                                {
+                                    continue;
+                                }
+
+                                rows.Add(new SyncStudent
+                                {
+                                    RowID = identity.Value,
+                                    StudentID = studentId.Value,
+                                    StudentName = ReadText(reader, "StudentName"),
+                                    YearName = ReadText(reader, "YearName"),
+                                    Department = ReadText(reader, "Department")
+                                });
+                            }
+                        }
+                    }
+
+                    bool truncated = rows.Count > 1000;
+                    if (truncated)
+                    {
+                        rows.RemoveAt(rows.Count - 1);
+                    }
+
+                    return new IdentityListResult
+                    {
+                        Rows = rows,
+                        Truncated = truncated,
+                        ErrorMessage = null
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                if (IsConnectionFailure(ex))
+                {
+                    return IdentityFail("SQL Server was not found on this computer. Start the local SQL Server service, then try again.");
+                }
+
+                var sql = ex as SqlException;
+                if (sql != null)
+                {
+                    return IdentityFail(Describe(sql, SearchField.Department));
+                }
+
+                return IdentityFail("The student list could not be read. " + ex.Message);
+            }
+        }
+
         public static GateDecision DecideAccess(long studentId)
         {
             if (studentId <= 0)
