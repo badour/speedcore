@@ -32,7 +32,7 @@ The sync page asks for a year name, a department, or both. A year matches any ro
 
 When a face is scanned, the terminal sends `sendlog`. The bridge asks `/gate/access`. The door opens only when the latest row has `IsAccessAllowed` set.
 
-Build the `StudentSyncBridge` project in this solution, then run it beside the site:
+In Visual Studio, right-click `StudentSyncBridge` and choose Build. The program is written to `StudentSyncBridge\bin\StudentSyncBridge.exe` on your disk. That folder is not shown in the project list. Run it beside the site:
 
 ```
 StudentSyncBridge.exe --middleware http://localhost:50931 --port 7792
