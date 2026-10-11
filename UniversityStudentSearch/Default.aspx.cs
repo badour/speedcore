@@ -116,6 +116,88 @@ namespace UniversityStudentSearch
             BindGrid();
         }
 
+        protected void gvStudents_RowDataBound(object sender, GridViewRowEventArgs e)
+        {
+            if (e.Row.RowType != DataControlRowType.DataRow)
+            {
+                return;
+            }
+
+            var row = e.Row.DataItem as StudentRow;
+            if (row == null)
+            {
+                return;
+            }
+
+            var access = e.Row.FindControl("ddlAccess") as DropDownList;
+            if (access == null)
+            {
+                return;
+            }
+
+            if (row.IsAccessAllowed == true)
+            {
+                access.SelectedValue = "true";
+            }
+            else if (row.IsAccessAllowed == false)
+            {
+                access.SelectedValue = "false";
+            }
+        }
+
+        protected void gvStudents_RowCommand(object sender, GridViewCommandEventArgs e)
+        {
+            if (!string.Equals(e.CommandName, "SaveAccess", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (!HasSearch)
+            {
+                ShowMessage("Search for a student before changing access.", true);
+                return;
+            }
+
+            int rowIndex;
+            if (!int.TryParse(Convert.ToString(e.CommandArgument, CultureInfo.InvariantCulture), NumberStyles.Integer, CultureInfo.InvariantCulture, out rowIndex)
+                || rowIndex < 0
+                || rowIndex >= gvStudents.Rows.Count
+                || gvStudents.DataKeys.Count <= rowIndex)
+            {
+                ShowMessage("That row could not be updated. Search again and retry.", true);
+                return;
+            }
+
+            object key = gvStudents.DataKeys[rowIndex].Value;
+            if (key == null || key == DBNull.Value)
+            {
+                ShowMessage("This row has no RowID, so access cannot be saved.", true);
+                return;
+            }
+
+            var access = gvStudents.Rows[rowIndex].FindControl("ddlAccess") as DropDownList;
+            if (access == null || (access.SelectedValue != "true" && access.SelectedValue != "false"))
+            {
+                ShowMessage("Choose Allowed or Not set.", true);
+                return;
+            }
+
+            long rowId = Convert.ToInt64(key, CultureInfo.InvariantCulture);
+            bool allowed = access.SelectedValue == "true";
+            string error = StudentRepository.UpdateAccess(rowId, allowed);
+            BindGrid();
+            if (!string.IsNullOrEmpty(error))
+            {
+                ShowMessage(error, true);
+                return;
+            }
+
+            if (pnlResults.Visible)
+            {
+                ShowSaved(allowed ? "Access saved as Allowed." : "Access saved as Not set.");
+            }
+        }
+
         protected void gvStudents_PreRender(object sender, EventArgs e)
         {
             if (gvStudents.Rows.Count > 0)
@@ -162,22 +244,6 @@ namespace UniversityStudentSearch
                 Convert.ToDecimal(value, CultureInfo.InvariantCulture).ToString("N2", CultureInfo.InvariantCulture));
         }
 
-        protected string AccessBadge(object value)
-        {
-            if (value == null || value == DBNull.Value)
-            {
-                return "<span class=\"badge badge-unknown\">Not set</span>";
-            }
-
-            bool allowed = Convert.ToBoolean(value, CultureInfo.InvariantCulture);
-            if (allowed)
-            {
-                return "<span class=\"badge badge-allowed\">Allowed</span>";
-            }
-
-            return "<span class=\"badge badge-blocked\">Not allowed</span>";
-        }
-
         private void BindGrid()
         {
             SearchField field;
@@ -197,8 +263,9 @@ namespace UniversityStudentSearch
             }
 
             PageIndex = result.PageIndex;
-            gvStudents.Columns[2].Visible = result.HasStage;
-            gvStudents.Columns[3].Visible = result.HasDepartment;
+            SetColumnVisible("Year name", result.HasYearName);
+            SetColumnVisible("Stage", result.HasStage);
+            SetColumnVisible("Department", result.HasDepartment);
 
             if (result.TotalCount == 0)
             {
@@ -218,7 +285,8 @@ namespace UniversityStudentSearch
                 "Showing " + from.ToString(CultureInfo.InvariantCulture)
                 + "–" + to.ToString(CultureInfo.InvariantCulture)
                 + " of " + result.TotalCount.ToString(CultureInfo.InvariantCulture)
-                + " for " + MatchSentence());
+                + " for " + MatchSentence()
+                + ". Latest matching row per student.");
 
             int pages = (int)Math.Ceiling(result.TotalCount / (double)StudentRepository.PageSize);
             pnlPager.Visible = pages > 1;
@@ -228,12 +296,32 @@ namespace UniversityStudentSearch
             btnNext.Enabled = result.PageIndex < pages - 1;
         }
 
+        private void ShowSaved(string text)
+        {
+            lblMessage.Visible = true;
+            lblMessage.CssClass = "message message-ok";
+            lblMessage.Text = HttpUtility.HtmlEncode(text ?? string.Empty);
+            lblMessage.Attributes["role"] = "status";
+        }
+
         private void ShowMessage(string text, bool isError)
         {
             lblMessage.Visible = true;
             lblMessage.CssClass = isError ? "message message-error" : "message";
             lblMessage.Text = HttpUtility.HtmlEncode(text ?? string.Empty);
             lblMessage.Attributes["role"] = isError ? "alert" : "status";
+        }
+
+        private void SetColumnVisible(string headerText, bool visible)
+        {
+            foreach (DataControlField column in gvStudents.Columns)
+            {
+                if (string.Equals(column.HeaderText, headerText, StringComparison.Ordinal))
+                {
+                    column.Visible = visible;
+                    return;
+                }
+            }
         }
 
         private void ApplyFieldHints()

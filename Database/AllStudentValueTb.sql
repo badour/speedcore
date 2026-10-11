@@ -14,7 +14,9 @@ BEGIN
         TotalValue money NULL,
         PaidValue money NULL,
         RemainingValue money NULL,
-        IsAccessAllowed bit NULL
+        IsAccessAllowed bit NULL,
+        YearName nvarchar(200) NULL,
+        RowID bigint IDENTITY(1,1) NOT NULL
     );
 END
 GO
@@ -30,6 +32,18 @@ GO
 
 IF COL_LENGTH(N'dbo.AllStudentValueTb', N'Department') IS NULL
     ALTER TABLE dbo.AllStudentValueTb ADD Department nvarchar(200) NULL;
+GO
+
+IF COL_LENGTH(N'dbo.AllStudentValueTb', N'YearName') IS NULL
+    ALTER TABLE dbo.AllStudentValueTb ADD YearName nvarchar(200) NULL;
+GO
+
+/*
+    RowID identifies each value row. When a student has several rows,
+    the search keeps the one with the greatest RowID.
+*/
+IF COL_LENGTH(N'dbo.AllStudentValueTb', N'RowID') IS NULL
+    ALTER TABLE dbo.AllStudentValueTb ADD RowID bigint IDENTITY(1,1) NOT NULL;
 GO
 
 /*

@@ -43,8 +43,10 @@
                 GridLines="None"
                 CellPadding="0"
                 CellSpacing="0"
+                DataKeyNames="RowID"
                 UseAccessibleHeader="True"
-                EnableViewState="False"
+                OnRowCommand="gvStudents_RowCommand"
+                OnRowDataBound="gvStudents_RowDataBound"
                 OnPreRender="gvStudents_PreRender">
                 <Columns>
                     <asp:TemplateField HeaderText="Student name" ItemStyle-CssClass="name" HeaderStyle-CssClass="name">
@@ -54,6 +56,11 @@
                     </asp:TemplateField>
                     <asp:TemplateField HeaderText="Student ID" ItemStyle-CssClass="id" HeaderStyle-CssClass="id">
                         <ItemTemplate><%# IdText(Eval("StudentID")) %></ItemTemplate>
+                    </asp:TemplateField>
+                    <asp:TemplateField HeaderText="Year name" Visible="False">
+                        <ItemTemplate>
+                            <span dir="auto"><%# TextOrDash(Eval("YearName")) %></span>
+                        </ItemTemplate>
                     </asp:TemplateField>
                     <asp:TemplateField HeaderText="Stage" Visible="False">
                         <ItemTemplate>
@@ -75,7 +82,16 @@
                         <ItemTemplate><%# MoneyText(Eval("RemainingValue")) %></ItemTemplate>
                     </asp:TemplateField>
                     <asp:TemplateField HeaderText="Access">
-                        <ItemTemplate><%# AccessBadge(Eval("IsAccessAllowed")) %></ItemTemplate>
+                        <ItemTemplate>
+                            <div class="access-edit">
+                                <asp:DropDownList ID="ddlAccess" runat="server" CssClass="access-choice">
+                                    <asp:ListItem Value="" Text="Choose" />
+                                    <asp:ListItem Value="true" Text="Allowed" />
+                                    <asp:ListItem Value="false" Text="Not set" />
+                                </asp:DropDownList>
+                                <asp:Button ID="btnSaveAccess" runat="server" Text="Save" CssClass="btn btn-ghost btn-small" CausesValidation="false" UseSubmitBehavior="false" CommandName="SaveAccess" CommandArgument='<%# Container.DataItemIndex %>' />
+                            </div>
+                        </ItemTemplate>
                     </asp:TemplateField>
                 </Columns>
             </asp:GridView>

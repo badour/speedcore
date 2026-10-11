@@ -25,6 +25,8 @@ namespace UniversityStudentSearch.Data
         public bool? IsAccessAllowed { get; set; }
         public string Stage { get; set; }
         public string Department { get; set; }
+        public string YearName { get; set; }
+        public long? RowID { get; set; }
     }
 
     public sealed class StudentSearchResult
@@ -34,6 +36,7 @@ namespace UniversityStudentSearch.Data
         public int PageIndex { get; set; }
         public bool HasStage { get; set; }
         public bool HasDepartment { get; set; }
+        public bool HasYearName { get; set; }
         public string ErrorMessage { get; set; }
 
         public bool Succeeded
@@ -56,7 +59,9 @@ namespace UniversityStudentSearch.Data
             "RemainingValue",
             "IsAccessAllowed",
             "Stage",
-            "Department"
+            "Department",
+            "YearName",
+            "RowID"
         };
 
         private static readonly string[] RequiredColumns = new[]
@@ -89,6 +94,64 @@ namespace UniversityStudentSearch.Data
                     field = SearchField.StudentName;
                     return false;
             }
+        }
+
+        public static string UpdateAccess(long rowId, bool isAccessAllowed)
+        {
+            var settings = ConfigurationManager.ConnectionStrings[ConnectionName];
+            if (settings == null || string.IsNullOrWhiteSpace(settings.ConnectionString))
+            {
+                return "The UniversityDBiap connection string is missing from Web.config.";
+            }
+
+            try
+            {
+                using (var connection = new SqlConnection(settings.ConnectionString))
+                {
+                    connection.Open();
+                    var columns = LoadColumns(connection);
+                    if (columns.Count > 0 && !columns.ContainsKey("RowID"))
+                    {
+                        return "AllStudentValueTb needs a RowID column so access can be saved.";
+                    }
+
+                    if (columns.Count > 0 && !columns.ContainsKey("IsAccessAllowed"))
+                    {
+                        return "AllStudentValueTb is missing the IsAccessAllowed column.";
+                    }
+
+                    string sql = "UPDATE [AllStudentValueTb] SET " + Expr(columns, "IsAccessAllowed")
+                        + " = @IsAccessAllowed WHERE " + Expr(columns, "RowID") + " = @RowID";
+                    using (var command = new SqlCommand(sql, connection))
+                    {
+                        command.CommandTimeout = 30;
+                        command.Parameters.Add("@IsAccessAllowed", SqlDbType.Bit).Value = isAccessAllowed;
+                        command.Parameters.Add("@RowID", SqlDbType.BigInt).Value = rowId;
+                        int affected = command.ExecuteNonQuery();
+                        if (affected == 0)
+                        {
+                            return "That student row was not found.";
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (IsConnectionFailure(ex))
+                {
+                    return "SQL Server was not found on this computer. Start the local SQL Server service, then search again.";
+                }
+
+                var sqlError = ex as SqlException;
+                if (sqlError != null)
+                {
+                    return Describe(sqlError, SearchField.StudentId);
+                }
+
+                return "Access could not be saved. " + ex.Message;
+            }
+
+            return null;
         }
 
         public static StudentSearchResult Search(SearchField field, string term, int pageIndex)
@@ -150,6 +213,13 @@ namespace UniversityStudentSearch.Data
 
                     bool hasStage = columns.ContainsKey("Stage");
                     bool hasDepartment = columns.ContainsKey("Department");
+                    bool hasYearName = columns.ContainsKey("YearName");
+                    bool hasRowId = columns.ContainsKey("RowID");
+
+                    if (schemaKnown && !hasRowId)
+                    {
+                        return Fail("AllStudentValueTb needs a RowID column so each student can show the latest row. Run Database/AllStudentValueTb.sql.");
+                    }
 
                     if (schemaKnown && field == SearchField.Stage && !hasStage)
                     {
@@ -163,7 +233,8 @@ namespace UniversityStudentSearch.Data
 
                     bool selectStage = hasStage || (!schemaKnown && field == SearchField.Stage);
                     bool selectDepartment = hasDepartment || (!schemaKnown && field == SearchField.Department);
-                    int total = Count(connection, field, term, columns);
+                    bool selectYearName = hasYearName || !schemaKnown;
+                    int total = Count(connection, field, term, columns, selectStage, selectDepartment, selectYearName);
 
                     int pages = total == 0 ? 1 : (int)Math.Ceiling(total / (double)PageSize);
                     if (pageIndex >= pages)
@@ -173,7 +244,7 @@ namespace UniversityStudentSearch.Data
 
                     var rows = total == 0
                         ? new List<StudentRow>()
-                        : FetchPage(connection, field, term, columns, selectStage, selectDepartment, pageIndex);
+                        : FetchPage(connection, field, term, columns, selectStage, selectDepartment, selectYearName, pageIndex);
 
                     return new StudentSearchResult
                     {
@@ -182,6 +253,7 @@ namespace UniversityStudentSearch.Data
                         PageIndex = pageIndex,
                         HasStage = selectStage,
                         HasDepartment = selectDepartment,
+                        HasYearName = selectYearName,
                         ErrorMessage = null
                     };
                 }
@@ -256,9 +328,16 @@ WHERE TABLE_NAME = N'AllStudentValueTb'", connection))
             return found;
         }
 
-        private static int Count(SqlConnection connection, SearchField field, string term, IDictionary<string, string> columns)
+        private static int Count(
+            SqlConnection connection,
+            SearchField field,
+            string term,
+            IDictionary<string, string> columns,
+            bool selectStage,
+            bool selectDepartment,
+            bool selectYearName)
         {
-            string sql = "SELECT COUNT(*) FROM [AllStudentValueTb] WHERE " + Where(field, columns);
+            string sql = "SELECT COUNT(*) FROM (" + LatestRowsSql(columns, field, selectStage, selectDepartment, selectYearName) + ") AS latestRows";
             using (var command = new SqlCommand(sql, connection))
             {
                 command.CommandTimeout = 30;
@@ -275,40 +354,27 @@ WHERE TABLE_NAME = N'AllStudentValueTb'", connection))
             IDictionary<string, string> columns,
             bool selectStage,
             bool selectDepartment,
+            bool selectYearName,
             int pageIndex)
         {
-            string name = Expr(columns, "StudentName");
-            string id = Expr(columns, "StudentID");
-            string total = Expr(columns, "TotalValue");
-            string paid = Expr(columns, "PaidValue");
-            string remaining = Expr(columns, "RemainingValue");
-            string access = Expr(columns, "IsAccessAllowed");
-            string stage = selectStage ? Expr(columns, "Stage") : "CAST(NULL AS nvarchar(400))";
-            string department = selectDepartment ? Expr(columns, "Department") : "CAST(NULL AS nvarchar(400))";
-
             string sql = @"
 SELECT
     StudentName,
     StudentID,
+    YearName,
     TotalValue,
     PaidValue,
     RemainingValue,
     IsAccessAllowed,
     Stage,
-    Department
+    Department,
+    RowID
 FROM (
     SELECT
-        " + name + @" AS StudentName,
-        " + id + @" AS StudentID,
-        " + total + @" AS TotalValue,
-        " + paid + @" AS PaidValue,
-        " + remaining + @" AS RemainingValue,
-        " + access + @" AS IsAccessAllowed,
-        " + stage + @" AS Stage,
-        " + department + @" AS Department,
-        ROW_NUMBER() OVER (ORDER BY " + name + ", " + id + @") AS RowNum
-    FROM [AllStudentValueTb]
-    WHERE " + Where(field, columns) + @"
+        latestRows.*,
+        ROW_NUMBER() OVER (ORDER BY CAST(latestRows.StudentName AS nvarchar(400)), latestRows.StudentID) AS RowNum
+    FROM (" + LatestRowsSql(columns, field, selectStage, selectDepartment, selectYearName) + @"
+    ) AS latestRows
 ) AS numbered
 WHERE numbered.RowNum > @Offset AND numbered.RowNum <= @EndRow
 ORDER BY numbered.RowNum";
@@ -326,18 +392,70 @@ ORDER BY numbered.RowNum";
                         {
                             StudentName = ReadText(reader, "StudentName"),
                             StudentID = ReadInt64(reader, "StudentID"),
+                            YearName = ReadText(reader, "YearName"),
                             TotalValue = ReadDecimal(reader, "TotalValue"),
                             PaidValue = ReadDecimal(reader, "PaidValue"),
                             RemainingValue = ReadDecimal(reader, "RemainingValue"),
                             IsAccessAllowed = ReadBool(reader, "IsAccessAllowed"),
                             Stage = ReadText(reader, "Stage"),
-                            Department = ReadText(reader, "Department")
+                            Department = ReadText(reader, "Department"),
+                            RowID = ReadInt64(reader, "RowID")
                         });
                     }
                 }
             }
 
             return rows;
+        }
+
+        private static string LatestRowsSql(
+            IDictionary<string, string> columns,
+            SearchField field,
+            bool selectStage,
+            bool selectDepartment,
+            bool selectYearName)
+        {
+            string name = Expr(columns, "StudentName");
+            string id = Expr(columns, "StudentID");
+            string rowId = Expr(columns, "RowID");
+            string total = Expr(columns, "TotalValue");
+            string paid = Expr(columns, "PaidValue");
+            string remaining = Expr(columns, "RemainingValue");
+            string access = Expr(columns, "IsAccessAllowed");
+            string stage = selectStage ? Expr(columns, "Stage") : "CAST(NULL AS nvarchar(400))";
+            string department = selectDepartment ? Expr(columns, "Department") : "CAST(NULL AS nvarchar(400))";
+            string yearName = selectYearName ? Expr(columns, "YearName") : "CAST(NULL AS nvarchar(400))";
+            string studentKey = "CASE WHEN " + id + " IS NULL THEN CAST(" + name + " AS nvarchar(400)) ELSE CONVERT(nvarchar(30), " + id + ") END";
+
+            return @"
+SELECT
+    StudentName,
+    StudentID,
+    YearName,
+    TotalValue,
+    PaidValue,
+    RemainingValue,
+    IsAccessAllowed,
+    Stage,
+    Department,
+    RowID
+FROM (
+    SELECT
+        " + name + @" AS StudentName,
+        " + id + @" AS StudentID,
+        " + yearName + @" AS YearName,
+        " + total + @" AS TotalValue,
+        " + paid + @" AS PaidValue,
+        " + remaining + @" AS RemainingValue,
+        " + access + @" AS IsAccessAllowed,
+        " + stage + @" AS Stage,
+        " + department + @" AS Department,
+        " + rowId + @" AS RowID,
+        ROW_NUMBER() OVER (PARTITION BY " + studentKey + " ORDER BY " + rowId + @" DESC) AS StudentRank
+    FROM [AllStudentValueTb]
+    WHERE " + Where(field, columns) + @"
+) AS ranked
+WHERE ranked.StudentRank = 1";
         }
 
         private static void AddParameters(SqlCommand command, SearchField field, string term, int offset)
@@ -464,6 +582,17 @@ ORDER BY numbered.RowNum";
             switch (ex.Number)
             {
                 case 207:
+                    string missing = ex.Message ?? string.Empty;
+                    if (missing.IndexOf("RowID", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return "AllStudentValueTb needs a RowID column so each student can show the latest row. Run Database/AllStudentValueTb.sql.";
+                    }
+
+                    if (missing.IndexOf("YearName", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return "AllStudentValueTb needs a YearName column. Run Database/AllStudentValueTb.sql.";
+                    }
+
                     if (field == SearchField.Stage)
                     {
                         return MissingOptionalColumn("Stage");
@@ -478,7 +607,7 @@ ORDER BY numbered.RowNum";
                 case 208:
                     return "The table AllStudentValueTb was not found in UniversityDBiap.";
                 case 229:
-                    return "This Windows login can reach UniversityDBiap, but it is not allowed to read AllStudentValueTb.";
+                    return "This Windows login can reach UniversityDBiap, but it is not allowed to read or update AllStudentValueTb.";
                 case 4060:
                     return "SQL Server refused to open the UniversityDBiap database for this Windows login.";
                 case 18456:

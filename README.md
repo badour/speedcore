@@ -16,10 +16,12 @@ Server=.;Database=UniversityDBiap;Trusted_Connection=True;TrustServerCertificate
 
 ## What the search returns
 
-Each match shows student name, student ID, total, paid, remaining, and whether access is allowed.
+Each match shows student name, student ID, year name, total, paid, remaining, and access. If a student has more than one row, the grid keeps the row with the greatest `RowID`.
 
-Student ID is an exact match. Name, stage, and department match any part of the value. Stage and Department are not in the original field list. `Database/AllStudentValueTb.sql` adds those two nullable columns when you run it. Until then, student ID and student name still search the existing table.
+Access can be changed on that row. Allowed writes `IsAccessAllowed = 1`. Not set writes `IsAccessAllowed = 0`.
+
+Student ID is an exact match. Name, stage, and department match any part of the value. `Database/AllStudentValueTb.sql` adds `Stage`, `Department`, `YearName`, and `RowID` when those columns are missing. The Windows login needs permission to read the table and to update `IsAccessAllowed`.
 
 ## Database script
 
-`Database/AllStudentValueTb.sql` creates `AllStudentValueTb` only when it is missing, then adds `Stage` and `Department` if those columns are not there. It does not delete existing rows.
+`Database/AllStudentValueTb.sql` creates `AllStudentValueTb` only when it is missing, then adds any missing search columns. It does not delete existing rows. A new `RowID` column is an identity, so existing rows receive numbers automatically.
