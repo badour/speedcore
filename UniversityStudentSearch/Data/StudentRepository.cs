@@ -1348,6 +1348,113 @@ ORDER BY ranked.StudentName, ranked.StudentID";
             }
         }
 
+        public static GateDecision DecideAccess(long studentId)
+        {
+            if (studentId <= 0)
+            {
+                return UnknownStudent();
+            }
+
+            var settings = ConfigurationManager.ConnectionStrings[ConnectionName];
+            if (settings == null || string.IsNullOrWhiteSpace(settings.ConnectionString))
+            {
+                return AccessFail("The UniversityDBiap connection string is missing from Web.config.");
+            }
+
+            try
+            {
+                var builder = new SqlConnectionStringBuilder(settings.ConnectionString);
+                builder.ConnectTimeout = 3;
+                using (var connection = new SqlConnection(builder.ConnectionString))
+                {
+                    connection.Open();
+                    string schema;
+                    var columns = LoadColumns(connection, out schema);
+                    if (columns.Count > 0 && (!columns.ContainsKey("StudentID") || !columns.ContainsKey("RowID")))
+                    {
+                        return AccessFail("AllStudentValueTb is missing StudentID or RowID.");
+                    }
+
+                    var departmentColumns = columns.Count > 0
+                        ? ResolveTextColumns(columns, NameKind.Department)
+                        : new List<string>();
+                    NameLookup departmentLookup = columns.Count > 0
+                        ? FindLookup(LoadForeignColumns(connection, schema), columns, NameKind.Department)
+                        : null;
+                    string id = Expr(columns, "StudentID");
+                    string rowId = Expr(columns, "RowID");
+                    string name = Expr(columns, "StudentName");
+                    string departmentExpr = RowLabel(columns, departmentColumns, departmentLookup);
+                    bool hasAccess = columns.Count == 0 || columns.ContainsKey("IsAccessAllowed");
+                    string accessSql = hasAccess ? Expr(columns, "IsAccessAllowed") + " AS IsAccessAllowed" : "CAST(NULL AS bit) AS IsAccessAllowed";
+                    string sql = @"
+SELECT TOP 1
+    " + name + @" AS StudentName,
+    " + departmentExpr + @" AS Department,
+    " + accessSql + @"
+FROM [AllStudentValueTb]
+WHERE " + id + @" = @StudentID
+ORDER BY " + rowId + " DESC";
+
+                    using (var command = new SqlCommand(sql, connection))
+                    {
+                        command.CommandTimeout = 30;
+                        command.Parameters.Add("@StudentID", SqlDbType.BigInt).Value = studentId;
+                        using (var reader = command.ExecuteReader())
+                        {
+                            if (!reader.Read())
+                            {
+                                return UnknownStudent();
+                            }
+
+                            bool? allowed = ReadBool(reader, "IsAccessAllowed");
+                            string studentName = ReadText(reader, "StudentName");
+                            string department = ReadText(reader, "Department");
+                            bool paid = allowed == true;
+                            return new GateDecision
+                            {
+                                Found = true,
+                                Allowed = paid,
+                                StudentName = studentName,
+                                Department = department,
+                                DeviceMessage = paid ? "Allowed" : "Not allowed"
+                            };
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (IsConnectionFailure(ex))
+                {
+                    return AccessFail("SQL Server was not found on this computer. Start the local SQL Server service, then try again.");
+                }
+
+                return AccessFail("The payment check could not be read. " + ex.Message);
+            }
+        }
+
+        private static GateDecision UnknownStudent()
+        {
+            return new GateDecision
+            {
+                Found = false,
+                Allowed = false,
+                DeviceMessage = "Unknown student"
+            };
+        }
+
+        private static GateDecision AccessFail(string message)
+        {
+            return new GateDecision
+            {
+                Found = false,
+                Allowed = false,
+                DeviceMessage = "Not allowed",
+                ErrorMessage = message
+            };
+        }
+
         public static string SaveIdentity(long? rowId, long studentId, string name, string department)
         {
             name = (name ?? string.Empty).Trim();

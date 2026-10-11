@@ -28,7 +28,13 @@ namespace UniversityStudentSearch.Data
         }
     }
 
-    public static class IclockStore
+    public sealed class GateCommand
+    {
+        public long Id { get; set; }
+        public string Body { get; set; }
+    }
+
+    public static class GateStore
     {
         private static readonly object Gate = new object();
         private static readonly XmlSerializer Serializer = new XmlSerializer(typeof(IclockState));
@@ -126,28 +132,7 @@ namespace UniversityStudentSearch.Data
             }
         }
 
-        public static string Options(string serial)
-        {
-            Touch(serial);
-                return "GET OPTION FROM: " + serial + "\r\n"
-                + "ATTLOGStamp=0\r\n"
-                + "OPERLOGStamp=0\r\n"
-                + "ATTPHOTOStamp=0\r\n"
-                + "ErrorDelay=30\r\n"
-                + "Delay=5\r\n"
-                + "TransTimes=00:00;14:05\r\n"
-                + "TransInterval=1\r\n"
-                + "TransFlag=TransData AttLog\tOpLog\tEnrollUser\tChgUser\tFACE\r\n"
-                + "Realtime=1\r\n"
-                + "Encrypt=None\r\n"
-                + "TimeZone=3\r\n"
-                + "ServerVer=2.4.1\r\n"
-                + "PushProtVer=2.4.1\r\n"
-                + "PushOptionsFlag=1\r\n"
-                + "Charset=UTF-8\r\n";
-        }
-
-        public static string NextCommands(string serial, int limit)
+        public static List<GateCommand> Pending(string serial, int limit)
         {
             if (limit < 1)
             {
@@ -165,26 +150,16 @@ namespace UniversityStudentSearch.Data
                 DeviceState device = EnsureDevice(state, serial);
                 device.LastSeenUtc = Now();
                 Backfill(state, device);
-                if (device.Pending.Count == 0)
-                {
-                    Save(state);
-                    return "OK";
-                }
-
-                var builder = new StringBuilder();
+                var commands = new List<GateCommand>();
                 int count = Math.Min(limit, device.Pending.Count);
                 for (int i = 0; i < count; i++)
                 {
                     PendingCommand command = device.Pending[i];
-                    builder.Append("C:");
-                    builder.Append(command.Id.ToString(CultureInfo.InvariantCulture));
-                    builder.Append(":");
-                    builder.Append(command.Body);
-                    builder.Append("\r\n");
+                    commands.Add(new GateCommand { Id = command.Id, Body = command.Body });
                 }
 
                 Save(state);
-                return builder.ToString();
+                return commands;
             }
         }
 
@@ -221,10 +196,53 @@ namespace UniversityStudentSearch.Data
 
         public static string UserInfoCommand(string studentId, string name, string department)
         {
-            return "DATA UPDATE USERINFO PIN=" + studentId
-                + "\tName=" + name
-                + "\tPri=0\tPasswd=\tCard=\tGrp=1\tTZ=0000000100000000\tDept="
-                + (department ?? string.Empty);
+            // backupnum 0 updates the person and does not send a face photo.
+            return "{\"cmd\":\"setuserinfo\",\"enrollid\":" + studentId
+                + ",\"name\":" + JsonQuote(name)
+                + ",\"department\":" + JsonQuote(department)
+                + ",\"backupnum\":0,\"admin\":0,\"record\":\"0\",\"enable\":true}";
+        }
+
+        public static string JsonQuote(string value)
+        {
+            if (value == null)
+            {
+                return "\"\"";
+            }
+
+            var builder = new StringBuilder(value.Length + 2);
+            builder.Append('"');
+            foreach (char ch in value)
+            {
+                switch (ch)
+                {
+                    case '\\':
+                    case '"':
+                        builder.Append('\\');
+                        builder.Append(ch);
+                        break;
+                    case '\b':
+                        builder.Append("\\b");
+                        break;
+                    case '\f':
+                        builder.Append("\\f");
+                        break;
+                    default:
+                        if (ch < 32)
+                        {
+                            builder.Append("\\u");
+                            builder.Append(((int)ch).ToString("x4", CultureInfo.InvariantCulture));
+                        }
+                        else
+                        {
+                            builder.Append(ch);
+                        }
+                        break;
+                }
+            }
+
+            builder.Append('"');
+            return builder.ToString();
         }
 
         private static void Backfill(IclockState state, DeviceState device)
@@ -382,7 +400,7 @@ namespace UniversityStudentSearch.Data
                 return PathOverride;
             }
 
-            return HostingEnvironment.MapPath("~/App_Data/iclock-state.xml");
+            return HostingEnvironment.MapPath("~/App_Data/gate-state.xml");
         }
     }
 

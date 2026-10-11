@@ -21,4 +21,19 @@ namespace UniversityStudentSearch.Data
             get { return string.IsNullOrEmpty(ErrorMessage); }
         }
     }
+
+    public sealed class GateDecision
+    {
+        public bool Found { get; set; }
+        public bool Allowed { get; set; }
+        public string StudentName { get; set; }
+        public string Department { get; set; }
+        public string DeviceMessage { get; set; }
+        public string ErrorMessage { get; set; }
+
+        public bool Succeeded
+        {
+            get { return string.IsNullOrEmpty(ErrorMessage); }
+        }
+    }
 }

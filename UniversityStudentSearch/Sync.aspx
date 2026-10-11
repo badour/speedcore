@@ -6,9 +6,9 @@
     <asp:Panel ID="syncPanel" runat="server" CssClass="search-panel" DefaultButton="btnSync">
         <div class="search-copy">
             <h2>Sync students to the gates</h2>
-            <p class="lede">Sync sends each new student's latest row to every AYTE AI-X1. The row is the one with the greatest RowID, and the fields are student name, student ID, and department. Device addresses are not required. Each terminal calls this server on its own.</p>
+            <p class="lede">Sync sends each new student's latest row to every AYTE AI-X1. The row is the one with the greatest RowID, and the fields are student name, student ID, and department. The terminals do not connect to this website, and their IP addresses are not required.</p>
         </div>
-        <p class="hint">On each terminal, set the server host to <strong><%= Server.HtmlEncode(ServerHost) %></strong> and the port to <strong><%= Server.HtmlEncode(ServerPort) %></strong>. Open this page with the address the gates can reach. A terminal then appears in the list below. Face photos and attendance logs are not changed.</p>
+        <p class="hint">On each terminal, set the Yunatt server port to <strong>7792</strong>. GateDeviceBridge accepts that WebSocket and calls this site at <strong><%= Server.HtmlEncode(MiddlewareAddress) %></strong>. A face already stored on the terminal is not replaced. When a face is scanned, the bridge asks this site whether payment allows the door to open.</p>
         <div class="actions sync-actions">
             <asp:Button ID="btnSync" runat="server" Text="Sync" CssClass="btn btn-search" OnClick="btnSync_Click" />
         </div>

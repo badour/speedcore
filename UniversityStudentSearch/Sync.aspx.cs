@@ -9,14 +9,9 @@ namespace UniversityStudentSearch
 {
     public partial class SyncPage : Page
     {
-        protected string ServerHost
+        protected string MiddlewareAddress
         {
-            get { return Request.Url.Host; }
-        }
-
-        protected string ServerPort
-        {
-            get { return Request.Url.Port.ToString(CultureInfo.InvariantCulture); }
+            get { return Request.Url.GetLeftPart(UriPartial.Authority); }
         }
 
         protected void Page_Load(object sender, EventArgs e)
@@ -38,7 +33,7 @@ namespace UniversityStudentSearch
                 return;
             }
 
-            SyncQueueResult queued = IclockStore.QueueLatest(students.Rows);
+            SyncQueueResult queued = GateStore.QueueLatest(students.Rows);
             BindDevices();
             if (!queued.Succeeded)
             {
@@ -70,7 +65,7 @@ namespace UniversityStudentSearch
 
         private void BindDevices()
         {
-            gvDevices.DataSource = IclockStore.ListDevices();
+            gvDevices.DataSource = GateStore.ListDevices();
             gvDevices.DataBind();
             int count = gvDevices.Rows.Count;
             lblSummary.Visible = true;

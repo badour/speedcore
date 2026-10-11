@@ -68,7 +68,7 @@
     <Content Include="Web.config" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Data\IclockStore.cs" />
+    <Compile Include="Data\GateStore.cs" />
     <Compile Include="Data\StudentRepository.cs" />
     <Compile Include="Data\StudentSync.cs" />
     <Compile Include="Sync.aspx.cs">
@@ -85,8 +85,8 @@
     <Compile Include="Default.aspx.designer.cs">
       <DependentUpon>Default.aspx</DependentUpon>
     </Compile>
-    <Compile Include="IclockHandler.cs" />
-    <Compile Include="IclockModule.cs" />
+    <Compile Include="GateHandler.cs" />
+    <Compile Include="GateModule.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Site.Master.cs">
       <DependentUpon>Site.Master</DependentUpon>

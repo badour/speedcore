@@ -24,9 +24,21 @@ Student ID is an exact match. Name, stage, and department match any part of the 
 
 ## Device sync
 
-Device sync sends student name, student ID, and department from `AllStudentValueTb` to every AYTE AI-X1 gate. Each student contributes the row with the greatest `RowID`. Pressing Sync queues students whose latest row is newer than the last sync. The first sync queues every current student.
+The AI-X1 terminals do not connect to IIS. Each terminal uses Yunatt WebSocket and JSON on port **7792**, path `/pub/chat`, and connects to `GateDeviceBridge`. The bridge calls this site over HTTP JSON, and this site reads `UniversityDBiap`.
 
-The page does not ask for a device IP address. On each terminal, set the server host and port shown on the page. The terminal calls this site at `/iclock/cdata`, `/iclock/getrequest`, and `/iclock/devicecmd`. Sync queues the new students for every terminal that has already called, and a terminal that calls later receives the same roster. The device command updates the user record, so face photos and attendance logs already on the terminal stay in place.
+On each terminal, set the server request on, the server address to the computer running the bridge, and the server port to 7792. Device IP addresses are not used.
+
+Pressing Sync queues student name, student ID, and department from the row with the greatest `RowID`. The first sync queues every current student. Later presses queue only students whose latest row is newer. The bridge sends `setuserinfo` to every connected terminal. That command does not include a face photo, and it does not delete people or attendance logs. A terminal that connects later receives the same students.
+
+When a face is scanned, the terminal sends `sendlog`. The bridge asks `/gate/access`. The door opens only when the latest row has `IsAccessAllowed` set.
+
+Run the bridge beside the site:
+
+```
+GateDeviceBridge.exe --middleware http://localhost:50931 --port 7792
+```
+
+Use the address of this site for `--middleware` when IIS is not on port 50931.
 
 ## Database script
 
