@@ -1209,6 +1209,253 @@ WHERE ranked.StudentRank = 1
             return Convert.ToBoolean(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
         }
 
+        public static IdentityListResult ListIdentities()
+        {
+            var settings = ConfigurationManager.ConnectionStrings[ConnectionName];
+            if (settings == null || string.IsNullOrWhiteSpace(settings.ConnectionString))
+            {
+                return IdentityFail("The UniversityDBiap connection string is missing from Web.config.");
+            }
+
+            try
+            {
+                using (var connection = new SqlConnection(settings.ConnectionString))
+                {
+                    connection.Open();
+                    string schema;
+                    var columns = LoadColumns(connection, out schema);
+                    if (columns.Count > 0)
+                    {
+                        if (!columns.ContainsKey("StudentName") || !columns.ContainsKey("StudentID"))
+                        {
+                            return IdentityFail("AllStudentValueTb is missing StudentName or StudentID.");
+                        }
+
+                        if (!columns.ContainsKey("RowID"))
+                        {
+                            return IdentityFail("AllStudentValueTb needs a RowID column so each student can show the latest row. Run Database/AllStudentValueTb.sql.");
+                        }
+                    }
+
+                    var departmentColumns = columns.Count > 0
+                        ? ResolveTextColumns(columns, NameKind.Department)
+                        : new List<string>();
+                    NameLookup departmentLookup = columns.Count > 0
+                        ? FindLookup(LoadForeignColumns(connection, schema), columns, NameKind.Department)
+                        : null;
+                    string departmentColumn = departmentColumns.Count > 0 ? departmentColumns[0] : null;
+                    string name = Expr(columns, "StudentName");
+                    string id = Expr(columns, "StudentID");
+                    string rowId = Expr(columns, "RowID");
+                    string studentKey = "CASE WHEN " + id + " IS NULL THEN CAST(" + name + " AS nvarchar(400)) ELSE CONVERT(nvarchar(30), " + id + ") END";
+                    string departmentSql = LatestLabel("ranked", columns, departmentColumns, departmentLookup);
+                    string sql = @"
+SELECT ranked.StudentName, ranked.StudentID, " + departmentSql + @" AS Department, ranked.RowID
+FROM (
+    SELECT
+        " + name + @" AS StudentName,
+        " + id + @" AS StudentID,
+        " + rowId + @" AS RowID,
+        ROW_NUMBER() OVER (PARTITION BY " + studentKey + " ORDER BY " + rowId + @" DESC) AS StudentRank
+    FROM [AllStudentValueTb]
+    WHERE " + id + @" IS NOT NULL
+) AS ranked
+WHERE ranked.StudentRank = 1
+ORDER BY ranked.StudentName, ranked.StudentID";
+
+                    var rows = new List<SyncStudent>();
+                    using (var command = new SqlCommand(sql, connection))
+                    {
+                        command.CommandTimeout = 60;
+                        using (var reader = command.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                long? studentId = ReadInt64(reader, "StudentID");
+                                long? identity = ReadInt64(reader, "RowID");
+                                if (!studentId.HasValue || !identity.HasValue)
+                                {
+                                    continue;
+                                }
+
+                                rows.Add(new SyncStudent
+                                {
+                                    RowID = identity.Value,
+                                    StudentID = studentId.Value,
+                                    StudentName = ReadText(reader, "StudentName"),
+                                    Department = ReadText(reader, "Department")
+                                });
+                            }
+                        }
+                    }
+
+                    return new IdentityListResult
+                    {
+                        Rows = rows,
+                        DepartmentColumn = departmentColumn,
+                        ErrorMessage = null
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                if (IsConnectionFailure(ex))
+                {
+                    return IdentityFail("SQL Server was not found on this computer. Start the local SQL Server service, then try again.");
+                }
+
+                var sql = ex as SqlException;
+                if (sql != null)
+                {
+                    return IdentityFail(Describe(sql, SearchField.Department));
+                }
+
+                return IdentityFail("The student list could not be read. " + ex.Message);
+            }
+        }
+
+        public static string SaveIdentity(long? rowId, long studentId, string name, string department)
+        {
+            name = (name ?? string.Empty).Trim();
+            department = string.IsNullOrWhiteSpace(department) ? null : department.Trim();
+            if (name.Length == 0)
+            {
+                return "Student " + studentId.ToString(CultureInfo.InvariantCulture) + " has no name to save.";
+            }
+
+            if (name.Length > 400)
+            {
+                name = name.Substring(0, 400);
+            }
+
+            var settings = ConfigurationManager.ConnectionStrings[ConnectionName];
+            if (settings == null || string.IsNullOrWhiteSpace(settings.ConnectionString))
+            {
+                return "The UniversityDBiap connection string is missing from Web.config.";
+            }
+
+            try
+            {
+                using (var connection = new SqlConnection(settings.ConnectionString))
+                {
+                    connection.Open();
+                    string schema;
+                    var columns = LoadColumns(connection, out schema);
+                    if (columns.Count > 0 && !columns.ContainsKey("RowID"))
+                    {
+                        return "AllStudentValueTb needs a RowID column so each student can show the latest row. Run Database/AllStudentValueTb.sql.";
+                    }
+
+                    var departmentColumns = columns.Count > 0
+                        ? ResolveTextColumns(columns, NameKind.Department)
+                        : new List<string> { "Department" };
+                    string departmentColumn = departmentColumns.Count > 0 ? departmentColumns[0] : null;
+                    if (department != null && departmentColumn == null)
+                    {
+                        return "AllStudentValueTb has no department column, so the department name cannot be saved.";
+                    }
+
+                    if (department != null && departmentColumn != null)
+                    {
+                        int max = ColumnMaxLength(connection, schema, departmentColumn);
+                        if (max > 0 && department.Length > max)
+                        {
+                            return "The department is longer than " + departmentColumn + " allows.";
+                        }
+                    }
+
+                    string sql;
+                    if (rowId.HasValue)
+                    {
+                        sql = "UPDATE [AllStudentValueTb] SET " + Expr(columns, "StudentName") + " = @StudentName";
+                        if (departmentColumn != null)
+                        {
+                            sql += ", " + Quote(departmentColumn) + " = @Department";
+                        }
+
+                        sql += " WHERE " + Expr(columns, "RowID") + " = @RowID AND " + Expr(columns, "StudentID") + " = @StudentID";
+                    }
+                    else
+                    {
+                        sql = "INSERT INTO [AllStudentValueTb] (" + Expr(columns, "StudentName") + ", " + Expr(columns, "StudentID");
+                        string values = "@StudentName, @StudentID";
+                        if (departmentColumn != null)
+                        {
+                            sql += ", " + Quote(departmentColumn);
+                            values += ", @Department";
+                        }
+
+                        sql += ") VALUES (" + values + ")";
+                    }
+
+                    using (var command = new SqlCommand(sql, connection))
+                    {
+                        command.CommandTimeout = 30;
+                        command.Parameters.Add("@StudentName", SqlDbType.NVarChar, -1).Value = name;
+                        command.Parameters.Add("@StudentID", SqlDbType.BigInt).Value = studentId;
+                        command.Parameters.Add("@Department", SqlDbType.NVarChar, -1).Value = (object)department ?? DBNull.Value;
+                        if (rowId.HasValue)
+                        {
+                            command.Parameters.Add("@RowID", SqlDbType.BigInt).Value = rowId.Value;
+                        }
+
+                        int affected = command.ExecuteNonQuery();
+                        if (rowId.HasValue && affected == 0)
+                        {
+                            return "That student row was not found.";
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (IsConnectionFailure(ex))
+                {
+                    return "SQL Server was not found on this computer. Start the local SQL Server service, then try again.";
+                }
+
+                var sql = ex as SqlException;
+                if (sql != null)
+                {
+                    return Describe(sql, SearchField.Department);
+                }
+
+                return "The student could not be saved. " + ex.Message;
+            }
+
+            return null;
+        }
+
+        private static int ColumnMaxLength(SqlConnection connection, string schema, string column)
+        {
+            using (var command = new SqlCommand(@"
+SELECT CHARACTER_MAXIMUM_LENGTH
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = @Schema
+  AND TABLE_NAME = N'AllStudentValueTb'
+  AND COLUMN_NAME = @Column", connection))
+            {
+                command.Parameters.Add("@Schema", SqlDbType.NVarChar, 128).Value = schema ?? "dbo";
+                command.Parameters.Add("@Column", SqlDbType.NVarChar, 128).Value = column;
+                object value = command.ExecuteScalar();
+                if (value == null || value == DBNull.Value)
+                {
+                    return -1;
+                }
+
+                return Convert.ToInt32(value, CultureInfo.InvariantCulture);
+            }
+        }
+
+        private static IdentityListResult IdentityFail(string message)
+        {
+            return new IdentityListResult
+            {
+                Rows = new List<SyncStudent>(),
+                ErrorMessage = message
+            };
+        }
+
         private static string MissingOptionalColumn(string column)
         {
             if (string.Equals(column, "Stage", StringComparison.OrdinalIgnoreCase))

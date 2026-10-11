@@ -46,6 +46,7 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Web" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
   </ItemGroup>
@@ -62,11 +63,23 @@
     <Content Include="Images\speed-core.png" />
     <Content Include="Images\university-seal.jpg" />
     <Content Include="Scripts\search.js" />
+    <Content Include="Scripts\sync.js" />
+    <Content Include="Sync.aspx" />
     <Content Include="Site.Master" />
     <Content Include="Web.config" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Data\AiX1Client.cs" />
+    <Compile Include="Data\DeviceCatalog.cs" />
     <Compile Include="Data\StudentRepository.cs" />
+    <Compile Include="Data\StudentSync.cs" />
+    <Compile Include="Sync.aspx.cs">
+      <DependentUpon>Sync.aspx</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="Sync.aspx.designer.cs">
+      <DependentUpon>Sync.aspx</DependentUpon>
+    </Compile>
     <Compile Include="Default.aspx.cs">
       <DependentUpon>Default.aspx</DependentUpon>
       <SubType>ASPXCodeBehind</SubType>

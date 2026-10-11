@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#050505" />
     <title></title>
     <link rel="icon" href="<%= ResolveUrl("~/Images/speed-core.png") %>" type="image/png" />
-    <link rel="stylesheet" href="<%= ResolveUrl("~/Content/site.css") %>?v=5" />
+    <link rel="stylesheet" href="<%= ResolveUrl("~/Content/site.css") %>?v=6" />
 </head>
 <body>
     <form id="siteForm" runat="server">
-        <a class="skip" href="#main">Skip to search</a>
+        <a class="skip" href="#main">Skip to content</a>
         <header class="site-header">
             <div class="brand">
                 <img class="seal" src="<%= ResolveUrl("~/Images/university-seal.jpg") %>" width="86" height="86" alt="Alsheikh Altoosi University" />
@@ -26,6 +26,10 @@
                 <img src="<%= ResolveUrl("~/Images/speed-core.png") %>" width="166" height="46" alt="Speed Core" />
             </div>
         </header>
+        <nav class="site-nav" aria-label="Sections">
+            <a class="<%= NavClass("Default.aspx") %>" href="<%= ResolveUrl("~/Default.aspx") %>">Student search</a>
+            <a class="<%= NavClass("Sync.aspx") %>" href="<%= ResolveUrl("~/Sync.aspx") %>">Device sync</a>
+        </nav>
         <main id="main" class="page">
             <asp:ContentPlaceHolder ID="MainContent" runat="server" />
         </main>
