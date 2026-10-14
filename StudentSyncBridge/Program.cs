@@ -10,8 +10,8 @@ namespace StudentSyncBridge
         public static int Main(string[] args)
         {
             string middleware = ConfigurationManager.AppSettings["MiddlewareUrl"] ?? "http://127.0.0.1:50931";
-            string payment = ConfigurationManager.AppSettings["PaymentBridge"] ?? "127.0.0.1:7793";
-            int port = 7792;
+            string payment = ConfigurationManager.AppSettings["PaymentBridge"] ?? "127.0.0.1:7792";
+            int port = 7793;
             int configuredPort;
             if (int.TryParse(ConfigurationManager.AppSettings["ListenPort"], NumberStyles.Integer, CultureInfo.InvariantCulture, out configuredPort))
             {

@@ -21,7 +21,7 @@
                 <asp:Button ID="btnFind" runat="server" Text="Find students" CssClass="btn btn-search" OnClick="btnFind_Click" />
             </div>
         </div>
-        <p class="hint">A year matches any row for that student, including 2026/2027 and 2026-2027. A department matches any row, including DepartmentName, DeptName, and a department lookup. When both boxes are filled, the student must match both. Access on the latest row must be null. On each terminal, set the Yunatt server port to <strong>7792</strong>. StudentSyncBridge calls this site at <strong><%= Server.HtmlEncode(MiddlewareAddress) %></strong>.</p>
+        <p class="hint">A year matches any row for that student, including 2026/2027 and 2026-2027. A department matches any row, including DepartmentName, DeptName, and a department lookup. When both boxes are filled, the student must match both. Access on the latest row must be null. On each terminal, set the Yunatt server port to <strong>7793</strong>. GateDeviceBridge stays on port 7792. StudentSyncBridge calls this site at <strong><%= Server.HtmlEncode(MiddlewareAddress) %></strong>.</p>
     </asp:Panel>
 
     <asp:Panel ID="pnlStudents" runat="server" Visible="false" CssClass="results-wrap">
