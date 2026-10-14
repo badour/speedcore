@@ -178,7 +178,7 @@ namespace StudentSyncBridge
                     link.InFlight = 0;
                     if (ok)
                     {
-                        Post("/gate/ack", "{\"sn\":" + Quote(link.Serial) + ",\"id\":" + id.ToString(CultureInfo.InvariantCulture) + ",\"result\":true}");
+                        Post("/Gate.ashx?op=ack", "{\"sn\":" + Quote(link.Serial) + ",\"id\":" + id.ToString(CultureInfo.InvariantCulture) + ",\"result\":true}");
                     }
 
                     Flush(link);
@@ -189,7 +189,7 @@ namespace StudentSyncBridge
         private void AnswerAccess(DeviceLink link, Dictionary<string, object> message)
         {
             long enrollId = FirstEnrollId(message);
-            string raw = Post("/gate/access", "{\"sn\":" + Quote(link.Serial) + ",\"enrollid\":" + enrollId.ToString(CultureInfo.InvariantCulture) + "}");
+            string raw = Post("/Gate.ashx?op=access", "{\"sn\":" + Quote(link.Serial) + ",\"enrollid\":" + enrollId.ToString(CultureInfo.InvariantCulture) + "}");
             int access = 0;
             string deviceMessage = "Not allowed";
             Dictionary<string, object> decision = Parse(raw);
@@ -218,7 +218,7 @@ namespace StudentSyncBridge
                 return;
             }
 
-            string raw = Get("/gate/commands?sn=" + Uri.EscapeDataString(link.Serial));
+            string raw = Get("/Gate.ashx?op=commands&sn=" + Uri.EscapeDataString(link.Serial));
             Dictionary<string, object> payload = Parse(raw);
             if (payload == null || !payload.ContainsKey("commands"))
             {
@@ -262,7 +262,7 @@ namespace StudentSyncBridge
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Middleware read failed: " + ex.Message);
+                Console.WriteLine("Middleware read failed " + middleware + path + ": " + ex.Message);
                 return string.Empty;
             }
         }
@@ -290,7 +290,7 @@ namespace StudentSyncBridge
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Middleware write failed: " + ex.Message);
+                Console.WriteLine("Middleware write failed " + middleware + path + ": " + ex.Message);
                 return string.Empty;
             }
         }

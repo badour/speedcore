@@ -24,7 +24,7 @@ Student ID is an exact match. Name, stage, and department match any part of the 
 
 ## Device sync
 
-The AI-X1 terminals do not connect to IIS. Each terminal uses Yunatt WebSocket and JSON on port **7792**, path `/pub/chat`, and connects to `StudentSyncBridge`. The bridge calls this site over HTTP JSON, and this site reads `UniversityDBiap`.
+The AI-X1 terminals do not connect to IIS. Each terminal uses Yunatt WebSocket and JSON on port **7792**, path `/pub/chat`, and connects to `StudentSyncBridge`. The bridge calls this site over HTTP JSON at `Gate.ashx`, and this site reads `UniversityDBiap`. Use the full site address, including the folder name, such as `https://epmdo.org/speedcore`.
 
 On each terminal, set the server request on, the server address to the computer running the bridge, and the server port to 7792. Device IP addresses are not used.
 
@@ -35,10 +35,10 @@ When a face is scanned, the terminal sends `sendlog`. The bridge asks `/gate/acc
 In Visual Studio, right-click `StudentSyncBridge` and choose Build. The program is written to `StudentSyncBridge\bin\StudentSyncBridge.exe` on your disk. That folder is not shown in the project list. Run it beside the site:
 
 ```
-StudentSyncBridge.exe --middleware http://localhost:50931 --port 7792
+StudentSyncBridge.exe --middleware https://epmdo.org/speedcore --port 7792
 ```
 
-Use the address of this site for `--middleware` when IIS is not on port 50931.
+The program reads that address from `StudentSyncBridge.exe.config`. Use the address shown on the sync page, including `/speedcore`. For IIS Express on this computer, pass `--middleware http://localhost:50931`.
 
 ## Database script
 

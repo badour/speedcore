@@ -28,21 +28,22 @@ namespace UniversityStudentSearch
             response.TrySkipIisCustomErrors = true;
 
             string path = (request.Path ?? string.Empty).ToLowerInvariant();
+            string op = (request.QueryString["op"] ?? string.Empty).Trim().ToLowerInvariant();
             try
             {
-                if (path.EndsWith("/access"))
+                if (op == "access" || path.EndsWith("/access"))
                 {
                     WriteAccess(request, response);
                     return;
                 }
 
-                if (path.EndsWith("/commands"))
+                if (op == "commands" || path.EndsWith("/commands"))
                 {
                     WriteCommands(request, response);
                     return;
                 }
 
-                if (path.EndsWith("/ack"))
+                if (op == "ack" || path.EndsWith("/ack"))
                 {
                     WriteAck(request, response);
                     return;

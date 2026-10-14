@@ -12,7 +12,17 @@ namespace UniversityStudentSearch
     {
         protected string MiddlewareAddress
         {
-            get { return Request.Url.GetLeftPart(UriPartial.Authority); }
+            get
+            {
+                string authority = Request.Url.GetLeftPart(UriPartial.Authority).TrimEnd('/');
+                string app = Request.ApplicationPath ?? string.Empty;
+                if (string.Equals(app, "/", StringComparison.Ordinal))
+                {
+                    app = string.Empty;
+                }
+
+                return authority + app.TrimEnd('/');
+            }
         }
 
         protected void Page_Load(object sender, EventArgs e)
