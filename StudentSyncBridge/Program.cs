@@ -10,6 +10,7 @@ namespace StudentSyncBridge
         public static int Main(string[] args)
         {
             string middleware = ConfigurationManager.AppSettings["MiddlewareUrl"] ?? "http://127.0.0.1:50931";
+            string payment = ConfigurationManager.AppSettings["PaymentBridge"] ?? "127.0.0.1:7793";
             int port = 7792;
             int configuredPort;
             if (int.TryParse(ConfigurationManager.AppSettings["ListenPort"], NumberStyles.Integer, CultureInfo.InvariantCulture, out configuredPort))
@@ -27,13 +28,21 @@ namespace StudentSyncBridge
                 {
                     int.TryParse(args[++i], NumberStyles.Integer, CultureInfo.InvariantCulture, out port);
                 }
+                else if (args[i] == "--payment" && i + 1 < args.Length)
+                {
+                    payment = args[++i];
+                }
             }
 
             middleware = middleware.Trim().TrimEnd('/');
-            var server = new BridgeServer(middleware, port);
+            var server = new BridgeServer(middleware, port, payment);
             server.Start();
             Console.WriteLine("StudentSyncBridge listening on port " + port.ToString(CultureInfo.InvariantCulture));
             Console.WriteLine("Middleware " + middleware);
+            if (server.PassesPaymentToGateBridge)
+            {
+                Console.WriteLine("Payment bridge " + server.PaymentAddress);
+            }
             Thread.Sleep(Timeout.Infinite);
             return 0;
         }

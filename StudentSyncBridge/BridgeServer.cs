@@ -17,13 +17,32 @@ namespace StudentSyncBridge
         private const string SocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
         private readonly string middleware;
         private readonly int port;
+        private readonly string paymentHost;
+        private readonly int paymentPort;
         private readonly JavaScriptSerializer json = new JavaScriptSerializer();
         private TcpListener listener;
 
-        public BridgeServer(string middleware, int port)
+        public BridgeServer(string middleware, int port, string paymentAddress)
         {
             this.middleware = middleware;
             this.port = port;
+            string host;
+            int payment;
+            if (TryParsePayment(paymentAddress, out host, out payment))
+            {
+                paymentHost = host;
+                paymentPort = payment;
+            }
+        }
+
+        public bool PassesPaymentToGateBridge
+        {
+            get { return paymentHost != null; }
+        }
+
+        public string PaymentAddress
+        {
+            get { return paymentHost == null ? string.Empty : paymentHost + ":" + paymentPort.ToString(CultureInfo.InvariantCulture); }
         }
 
         public void Start()
@@ -63,6 +82,15 @@ namespace StudentSyncBridge
                 }
 
                 Console.WriteLine("Terminal connected");
+                string requestPath = link.RequestPath;
+                PaymentLink payment = OpenPayment(requestPath);
+                link.Payment = payment;
+                if (payment != null)
+                {
+                    Console.WriteLine("Payment checks stay with GateDeviceBridge at " + PaymentAddress);
+                    ThreadPool.QueueUserWorkItem(delegate { PumpPayment(link, payment); });
+                }
+
                 var timer = new Timer(delegate
                 {
                     try
@@ -86,12 +114,21 @@ namespace StudentSyncBridge
 
                     if (frame.Opcode == 8)
                     {
+                        ForwardToPayment(link, frame.Opcode, frame.Payload);
                         break;
                     }
 
                     if (frame.Opcode == 9)
                     {
-                        SendFrame(link, 10, frame.Payload);
+                        if (link.Payment != null)
+                        {
+                            ForwardToPayment(link, frame.Opcode, frame.Payload);
+                        }
+                        else
+                        {
+                            SendFrame(link, 10, frame.Payload);
+                        }
+
                         continue;
                     }
 
@@ -108,7 +145,11 @@ namespace StudentSyncBridge
 
                     string text = pendingText.ToString();
                     pendingText.Length = 0;
-                    HandleText(link, text);
+                    bool handled = HandleText(link, text);
+                    if (!handled)
+                    {
+                        ForwardToPayment(link, 1, Encoding.UTF8.GetBytes(text));
+                    }
                 }
                 }
                 finally
@@ -123,6 +164,12 @@ namespace StudentSyncBridge
             finally
             {
                 link.Open = false;
+                if (link.Payment != null)
+                {
+                    link.Payment.Open = false;
+                    link.Payment.Client.Close();
+                }
+
                 client.Close();
                 if (!string.IsNullOrEmpty(link.Serial))
                 {
@@ -131,12 +178,12 @@ namespace StudentSyncBridge
             }
         }
 
-        private void HandleText(DeviceLink link, string text)
+        private bool HandleText(DeviceLink link, string text)
         {
             Dictionary<string, object> message = Parse(text);
             if (message == null)
             {
-                return;
+                return link.Payment == null;
             }
 
             if (message.ContainsKey("cmd"))
@@ -146,26 +193,53 @@ namespace StudentSyncBridge
                 {
                     link.Serial = AsString(message, "sn");
                     Console.WriteLine("Terminal registered " + link.Serial);
+                    if (link.Payment != null)
+                    {
+                        return false;
+                    }
+
                     SendJson(link, "{\"ret\":\"reg\",\"result\":true,\"cloudtime\":" + Quote(Now()) + "}");
                     SendJson(link, "{\"cmd\":\"setdevinfo\",\"server_verify\":1}");
                     Flush(link);
-                    return;
+                    return true;
                 }
 
                 if (cmd == "sendlog")
                 {
-                    AnswerAccess(link, message);
-                    return;
+                    if (link.Payment != null)
+                    {
+                        if (!link.Payment.Open)
+                        {
+                            Console.WriteLine("Face scan was not passed on. GateDeviceBridge disconnected.");
+                            return true;
+                        }
+
+                        return false;
+                    }
+
+                    if (!PassesPaymentToGateBridge)
+                    {
+                        AnswerAccess(link, message);
+                        return true;
+                    }
+
+                    Console.WriteLine("Face scan was not answered here. Start GateDeviceBridge on " + PaymentAddress + " so it can send the payment result.");
+                    return true;
+                }
+
+                if (link.Payment != null)
+                {
+                    return false;
                 }
 
                 if (cmd == "senduser")
                 {
                     SendJson(link, "{\"ret\":\"senduser\",\"result\":true,\"cloudtime\":" + Quote(Now()) + "}");
-                    return;
+                    return true;
                 }
 
                 SendJson(link, "{\"ret\":" + Quote(cmd) + ",\"result\":true,\"cloudtime\":" + Quote(Now()) + "}");
-                return;
+                return true;
             }
 
             if (message.ContainsKey("ret"))
@@ -182,8 +256,209 @@ namespace StudentSyncBridge
                     }
 
                     Flush(link);
+                    return true;
                 }
             }
+
+            return link.Payment == null;
+        }
+
+        private PaymentLink OpenPayment(string requestPath)
+        {
+            if (paymentHost == null)
+            {
+                return null;
+            }
+
+            TcpClient client = null;
+            try
+            {
+                client = new TcpClient();
+                client.Connect(paymentHost, paymentPort);
+                NetworkStream stream = client.GetStream();
+                if (!ClientUpgrade(stream, requestPath, paymentHost, paymentPort))
+                {
+                    client.Close();
+                    Console.WriteLine("GateDeviceBridge at " + PaymentAddress + " did not accept the terminal.");
+                    return null;
+                }
+
+                return new PaymentLink(client, stream);
+            }
+            catch (Exception ex)
+            {
+                if (client != null)
+                {
+                    client.Close();
+                }
+
+                Console.WriteLine("GateDeviceBridge is not running at " + PaymentAddress + ". " + ex.Message);
+                return null;
+            }
+        }
+
+        private void PumpPayment(DeviceLink link, PaymentLink payment)
+        {
+            try
+            {
+                while (link.Open && payment.Open)
+                {
+                    WsFrame frame = ReadFrame(payment.Stream);
+                    if (frame == null || frame.Opcode == 8)
+                    {
+                        break;
+                    }
+
+                    SendFrame(link, frame.Opcode, frame.Payload);
+                }
+            }
+            catch (Exception)
+            {
+            }
+            finally
+            {
+                payment.Open = false;
+            }
+        }
+
+        private static void ForwardToPayment(DeviceLink link, int opcode, byte[] payload)
+        {
+            PaymentLink payment = link.Payment;
+            if (payment == null || !payment.Open)
+            {
+                return;
+            }
+
+            try
+            {
+                lock (payment.SendLock)
+                {
+                    if (!payment.Open)
+                    {
+                        return;
+                    }
+
+                    WriteClientFrame(payment.Stream, opcode, payload ?? new byte[0]);
+                    payment.Stream.Flush();
+                }
+            }
+            catch (Exception)
+            {
+                payment.Open = false;
+            }
+        }
+
+        private static bool ClientUpgrade(NetworkStream stream, string requestPath, string host, int port)
+        {
+            byte[] keyBytes = new byte[16];
+            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(keyBytes);
+            }
+
+            string key = Convert.ToBase64String(keyBytes);
+            string path = string.IsNullOrEmpty(requestPath) ? "/pub/chat" : requestPath;
+            string request = "GET " + path + " HTTP/1.1\r\n"
+                + "Host: " + host + ":" + port.ToString(CultureInfo.InvariantCulture) + "\r\n"
+                + "Upgrade: websocket\r\n"
+                + "Connection: Upgrade\r\n"
+                + "Sec-WebSocket-Key: " + key + "\r\n"
+                + "Sec-WebSocket-Version: 13\r\n\r\n";
+            byte[] bytes = Encoding.ASCII.GetBytes(request);
+            stream.Write(bytes, 0, bytes.Length);
+            stream.Flush();
+
+            var buffer = new byte[8192];
+            int count = 0;
+            while (count < buffer.Length)
+            {
+                int read = stream.Read(buffer, count, buffer.Length - count);
+                if (read <= 0)
+                {
+                    return false;
+                }
+
+                count += read;
+                if (Encoding.ASCII.GetString(buffer, 0, count).Contains("\r\n\r\n"))
+                {
+                    break;
+                }
+            }
+
+            string response = Encoding.ASCII.GetString(buffer, 0, count);
+            return response.StartsWith("HTTP/1.1 101", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void WriteClientFrame(NetworkStream stream, int opcode, byte[] payload)
+        {
+            byte[] mask = new byte[4];
+            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(mask);
+            }
+
+            int headerLength = payload.Length < 126 ? 6 : 8;
+            var frame = new byte[headerLength + payload.Length];
+            frame[0] = (byte)(0x80 | opcode);
+            if (payload.Length < 126)
+            {
+                frame[1] = (byte)(0x80 | payload.Length);
+                Buffer.BlockCopy(mask, 0, frame, 2, 4);
+            }
+            else
+            {
+                frame[1] = (byte)(0x80 | 126);
+                frame[2] = (byte)((payload.Length >> 8) & 0xff);
+                frame[3] = (byte)(payload.Length & 0xff);
+                Buffer.BlockCopy(mask, 0, frame, 4, 4);
+            }
+
+            int offset = headerLength;
+            for (int i = 0; i < payload.Length; i++)
+            {
+                frame[offset + i] = (byte)(payload[i] ^ mask[i % 4]);
+            }
+
+            stream.Write(frame, 0, frame.Length);
+        }
+
+        private static bool TryParsePayment(string value, out string host, out int port)
+        {
+            host = null;
+            port = 0;
+            string text = (value ?? string.Empty).Trim();
+            if (text.Length == 0 || text.Equals("off", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            int split = text.LastIndexOf(':');
+            if (split <= 0 || split == text.Length - 1)
+            {
+                return false;
+            }
+
+            int parsed;
+            if (!int.TryParse(text.Substring(split + 1), NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed) || parsed < 1 || parsed > 65535)
+            {
+                return false;
+            }
+
+            host = text.Substring(0, split).Trim();
+            port = parsed;
+            return host.Length > 0;
+        }
+
+        private static string RequestPath(string header)
+        {
+            string line = header.Split(new[] { "\r\n" }, StringSplitOptions.None)[0];
+            string[] parts = line.Split(' ');
+            if (parts.Length >= 2 && parts[1].StartsWith("/", StringComparison.Ordinal))
+            {
+                return parts[1];
+            }
+
+            return "/pub/chat";
         }
 
         private void AnswerAccess(DeviceLink link, Dictionary<string, object> message)
@@ -478,6 +753,7 @@ namespace StudentSyncBridge
             }
 
             string header = Encoding.ASCII.GetString(buffer, 0, count);
+            link.RequestPath = RequestPath(header);
             string key = HeaderValue(header, "Sec-WebSocket-Key");
             if (key.Length == 0)
             {
@@ -607,7 +883,24 @@ namespace StudentSyncBridge
             public NetworkStream Stream { get; private set; }
             public object SendLock = new object();
             public string Serial = string.Empty;
+            public string RequestPath = "/pub/chat";
+            public PaymentLink Payment;
             public long InFlight;
+            public bool Open;
+        }
+
+        private sealed class PaymentLink
+        {
+            public PaymentLink(TcpClient client, NetworkStream stream)
+            {
+                Client = client;
+                Stream = stream;
+                Open = true;
+            }
+
+            public TcpClient Client { get; private set; }
+            public NetworkStream Stream { get; private set; }
+            public object SendLock = new object();
             public bool Open;
         }
 

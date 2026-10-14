@@ -26,16 +26,18 @@ Student ID is an exact match. Name, stage, and department match any part of the 
 
 The AI-X1 terminals do not connect to IIS. Each terminal uses Yunatt WebSocket and JSON on port **7792**, path `/pub/chat`, and connects to `StudentSyncBridge`. The bridge calls this site over HTTP JSON at `Gate.ashx`, and this site reads `UniversityDBiap`. Use the full site address, including the folder name, such as `https://epmdo.org/speedcore`.
 
+Face scans are passed through to the existing `GateDeviceBridge`, which still checks payment and sends the result to the terminal. Run `GateDeviceBridge` on port **7793**. `StudentSyncBridge` listens on **7792** and forwards each scan to `127.0.0.1:7793`. Student names are still sent with `setuserinfo` and do not replace the payment reply.
+
 On each terminal, set the server request on, the server address to the computer running the bridge, and the server port to 7792. Device IP addresses are not used.
 
 The sync page asks for a year name, a department, or both. A year matches any row for that student. Slashes, dashes, and spaces between the years are treated the same, so `2026-2027` matches `2026/2027`. A department matches any row, using the same name columns and lookup as student search, so `قسم القانون` also matches a department stored as `القانون`. When both boxes are filled, the student must match both. The list keeps the latest row of each student and includes that student only when `IsAccessAllowed` is null. The year and department shown are the latest values that matched the filter. Choose one student or all of them, then Sync queues those names, IDs, and departments. A later sync of the same row does not queue it again. The bridge sends `setuserinfo` to every connected terminal. That command does not include a face photo, and it does not delete people or attendance logs. A terminal that connects later receives the same students.
 
-When a face is scanned, the terminal sends `sendlog`. The bridge asks `/gate/access`. The door opens only when the latest row has `IsAccessAllowed` set.
+When a face is scanned, the terminal sends `sendlog`. `StudentSyncBridge` forwards that message to `GateDeviceBridge` on port 7793, and forwards `GateDeviceBridge`'s payment reply back to the terminal unchanged.
 
 In Visual Studio, right-click `StudentSyncBridge` and choose Build. The program is written to `StudentSyncBridge\bin\StudentSyncBridge.exe` on your disk. That folder is not shown in the project list. Run it beside the site:
 
 ```
-StudentSyncBridge.exe --middleware https://epmdo.org/speedcore --port 7792
+StudentSyncBridge.exe --middleware https://epmdo.org/speedcore --port 7792 --payment 127.0.0.1:7793
 ```
 
 The program reads that address from `StudentSyncBridge.exe.config`. Use the address shown on the sync page, including `/speedcore`. For IIS Express on this computer, pass `--middleware http://localhost:50931`.
